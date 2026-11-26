@@ -1,0 +1,9 @@
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+node_modules/
+.DS_Store
+# workflows exportados podem conter IDs de credenciais: revise antes de versionar
+workflows-exportados/

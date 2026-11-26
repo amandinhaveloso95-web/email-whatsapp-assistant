@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "AnaliseEmail",
+  "type": "object",
+  "required": ["prioridade", "resumo", "acao_necessaria", "prazo", "tipo"],
+  "additionalProperties": false,
+  "properties": {
+    "prioridade": { "enum": ["alta", "media", "baixa"] },
+    "resumo": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 4,
+      "items": { "type": "string", "maxLength": 140 }
+    },
+    "acao_necessaria": { "type": ["string", "null"] },
+    "prazo": {
+      "type": ["string", "null"],
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+    },
+    "tipo": { "enum": ["responder", "tarefa", "reuniao", "informativo"] }
+  }
+}
