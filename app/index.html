@@ -180,7 +180,7 @@ button.pill:hover{background:var(--surface-2)}
 .modal h2{margin:0 0 var(--s1)}
 .field{margin:var(--s4) 0}.field label{display:block;font-weight:600;font-size:var(--fs-sm);margin-bottom:6px}
 .field select,.field textarea,.field input[type=text]{width:100%;border:1px solid var(--line);background:var(--surface-2);border-radius:var(--r-sm);padding:10px 12px;min-height:var(--tap)}
-.check{display:flex;gap:var(--s3);align-items:center;font-weight:500}.check input{width:22px;height:22px;accent-color:var(--accent)}
+.field .check,.check{display:flex;margin-bottom:0;gap:var(--s3);align-items:center;font-weight:500}.check input{width:22px;height:22px;accent-color:var(--accent)}
 .btn{border:1px solid var(--line);background:var(--surface);border-radius:var(--r-sm);padding:10px 16px;font-weight:600;min-height:var(--tap);display:inline-flex;align-items:center;gap:var(--s2)}
 .btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
 .btn.sm{min-height:36px;padding:6px 12px;font-size:var(--fs-sm)}
@@ -314,13 +314,13 @@ function friendly(err) {
 
 /* ============ estado ============ */
 const DEFAULTS = {
-  interval: 60, notifyMode: 'all', sound: true, mute: '', vip: '', meetingReplies: 'comment',
-  perfil: 'a pessoa dona desta caixa de entrada (edite em Configurações com sua profissão e contexto)', assinatura: 'Seu nome', autoTriage: false
+  interval: 60, notifyMode: 'all', sound: true, mute: '', vip: '', meetingReplies: 'comment', mencoes: 'amanda', mencaoAuto: true,
+  perfil: 'Amanda, analista de BI e gestão em Bio-Manguinhos/Fiocruz', assinatura: 'Amanda', autoTriage: false
 };
 const S = {
   emails: [], older: [], connState: 'init', connMsg: '', lastOk: null, demo: false, canMore: true, loadingMore: false,
   pane: 'emails', filter: 'all', q: '', searchOpen: false,
-  tasks: [], seen: {}, prio: {}, sums: {}, digest: null, settings: { ...DEFAULTS },
+  tasks: [], seen: {}, prio: {}, sums: {}, mentions: {}, mhash: {}, scanning: false, digest: null, settings: { ...DEFAULTS },
   log: [], newKeys: new Set(), pendingBelow: 0
 };
 const B = {}; // cache de corpo e id da conversa por e-mail
@@ -329,11 +329,11 @@ let mcp = null, sample = null, desktop = null, db = null, uid = null, stopWatch 
 let desktopNotif = false, interacted = false, baselineDone = false, storeMode = 'none', LOGID = 0;
 
 /* ============ persistência ============ */
-const persistData = () => ({ tasks: S.tasks.slice(0, 200), seen: S.seen, prio: S.prio, sums: S.sums, digest: S.digest, settings: S.settings, v: 2 });
-function trimMaps() { const cap = (o, n) => { const ks = Object.keys(o); if (ks.length > n) for (const k of ks.slice(0, ks.length - n)) delete o[k]; }; cap(S.seen, 500); cap(S.prio, 200); cap(S.sums, 30); }
+const persistData = () => ({ tasks: S.tasks.slice(0, 200), seen: S.seen, prio: S.prio, sums: S.sums, mentions: S.mentions, mhash: S.mhash, digest: S.digest, settings: S.settings, v: 2 });
+function trimMaps() { const cap = (o, n) => { const ks = Object.keys(o); if (ks.length > n) for (const k of ks.slice(0, ks.length - n)) delete o[k]; }; cap(S.seen, 500); cap(S.prio, 200); cap(S.sums, 30); cap(S.mentions, 400); cap(S.mhash, 400); }
 function applyLoaded(d) {
   if (!d || typeof d !== 'object') return;
-  S.tasks = Array.isArray(d.tasks) ? d.tasks : []; S.seen = d.seen || {}; S.prio = d.prio || {}; S.sums = d.sums || {};
+  S.tasks = Array.isArray(d.tasks) ? d.tasks : []; S.seen = d.seen || {}; S.prio = d.prio || {}; S.sums = d.sums || {}; S.mentions = d.mentions || {}; S.mhash = d.mhash || {};
   S.digest = d.digest && !d.digest.loading ? d.digest : null; S.settings = { ...DEFAULTS, ...(d.settings || {}) };
 }
 let saveTimer = null, saving = false, dirty = false;
@@ -438,13 +438,14 @@ async function loadOlder() {
 function onEmails(list) {
   const emails = list.map(normEmail).sort((a, b) => new Date(b.date) - new Date(a.date));
   S.emails = emails; S.lastOk = new Date();
-  const fresh = emails.filter((e) => !S.seen[K(e.id)]);
+  const fresh = emails.filter((e) => !S.seen[K(e.id)]); const firstEver = !baselineDone && Object.keys(S.seen).length === 0;
   if (!baselineDone) {
     baselineDone = true;
     if (Object.keys(S.seen).length === 0) { emails.forEach((e) => { S.seen[K(e.id)] = 1; }); persist(); }
     else { notifyNew(fresh.filter((e) => e.unread && isShown(e))); fresh.forEach((e) => { S.seen[K(e.id)] = 1; }); }
   } else { notifyNew(fresh.filter((e) => e.unread && isShown(e))); fresh.forEach((e) => { S.seen[K(e.id)] = 1; }); }
   if (fresh.length) persist();
+  if (fresh.length && !firstEver) scanMany(fresh.filter(isShown).slice(0, 8), false);
   if (S.settings.autoTriage && sample && fresh.length) runTriage(fresh.filter(isShown).slice(0, 15), true);
   renderAll(false, false);
 }
@@ -592,8 +593,67 @@ function actTask(e) {
   addLog({ kind: 'taskform', eid: e.id, title: (sum && sum.tarefa) || ('Responder: ' + e.subject), due: '' }); renderChat(true);
 }
 function addTask(title, due, e) {
-  S.tasks.unshift({ id: 't' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), title: title.trim(), due: due || '', done: false, eid: e ? e.id : '', subject: e ? e.subject : '', link: e ? (e.link || '') : '', created: new Date().toISOString() });
-  persist(); renderList();
+  const t = { id: 't' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), title: title.trim(), due: due || '', done: false, eid: e ? e.id : '', subject: e ? e.subject : '', link: e ? (e.link || '') : '', created: new Date().toISOString() };
+  S.tasks.unshift(t); persist(); renderList(); return t;
+}
+
+/* ============ menções (@nome) viram tarefa ============ */
+const fold = (s) => String(s || '').replace(/[\u00C0-\u017F]/g, (c) => c.normalize('NFD')[0]).toLowerCase();
+function myAliases() {
+  let a = terms(S.settings.mencoes).map((x) => fold(x).replace(/^@/, '').trim()).filter(Boolean);
+  if (!a.length) { const f = fold(S.settings.assinatura).trim().split(/\s+/)[0]; if (f && f !== 'seu') a = [f]; }
+  return a;
+}
+function findMention(text) {
+  const al = myAliases(); if (!al.length) return null;
+  const t = String(text || ''), f = fold(t);
+  const alt = al.map((a) => a.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/\s+/g, '\\s+')).join('|');
+  const m = new RegExp('(^|[^\\p{L}\\p{N}_.@-])@(?:' + alt + ')(?![\\p{L}\\p{N}_]|\\.[a-z])', 'u').exec(f); if (!m) return null;
+  const start = m.index + m[1].length, end = m.index + m[0].length;
+  const rest = t.slice(end, end + 260).replace(/^[\s,:;.\-–—]+/, '');
+  const line = rest.split(/\n/)[0].trim();
+  const task = (line.length >= 3 ? line : rest.replace(/\s+/g, ' ').trim()).slice(0, 220);
+  return { task, ctx: t.slice(Math.max(0, start - 150), end + 350).replace(/\s+/g, ' ').trim(), h: K(fold(task).replace(/\s+/g, ' ').slice(0, 80)) };
+}
+const isMention = (e) => ['t', 'm', 'd'].includes(S.mentions[K(e.id)]);
+async function mentionTask(e, hit) {
+  const fallback = hit.task.replace(/\s+/g, ' ').slice(0, 140) || ('Ver e-mail: ' + e.subject);
+  if (!sample) return { title: fallback, due: '' };
+  try {
+    const hoje = new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric' });
+    const o = await askJson('Hoje é ' + hoje + '. Neste e-mail, alguém mencionou com @ a pessoa dona da caixa e pediu algo. Transforme o pedido em uma tarefa curta (verbo no infinitivo, até 12 palavras), em português do Brasil, sem inventar nada além do trecho. Se houver prazo, converta para a data AAAA-MM-DD usando a data de hoje; se não houver, use null. Responda APENAS com JSON: {"tarefa":"...","prazo":"AAAA-MM-DD ou null"}\n\nAssunto: ' + e.subject + '\nDe: ' + e.fromName + '\nTrecho: ' + hit.ctx, { modelTier: 'quick' });
+    const title = String(o.tarefa || '').trim().slice(0, 140) || fallback;
+    const due = /^\d{4}-\d{2}-\d{2}$/.test(String(o.prazo || '')) ? String(o.prazo) : '';
+    return { title, due };
+  } catch { return { title: fallback, due: '' }; }
+}
+async function scanMention(e) {
+  const k = K(e.id); if (S.mentions[k]) return null;
+  let hit = findMention(e.subject + '\n' + e.preview);
+  if (!hit && !S.demo && mcp) { try { hit = findMention(await ensureBody(e)); } catch { return 'erro'; } }
+  if (!hit) { S.mentions[k] = 'n'; persist(); return null; }
+  if (S.mhash[hit.h]) { S.mentions[k] = 'd'; persist(); return null; }
+  S.mhash[hit.h] = 1;
+  if (!S.prio[k] || S.prio[k].p !== 'alta') S.prio[k] = { p: 'alta', m: 'você foi mencionado' };
+  if (!S.settings.mencaoAuto) { S.mentions[k] = 'm'; persist(); return { e, task: null }; }
+  const { title, due } = await mentionTask(e, hit);
+  const t = addTask(title, due, e); t.src = 'menção'; S.mentions[k] = 't'; persist();
+  return { e, task: t };
+}
+async function scanMany(list, manual) {
+  if (S.scanning) return; S.scanning = true; let found = 0, fail = 0; const made = [];
+  try { for (const e of list) { const r = await scanMention(e); if (r === 'erro') fail++; else if (r) { found++; if (r.task) made.push(r); } } }
+  finally { S.scanning = false; }
+  for (const r of made) {
+    const k = K(r.e.id), t = r.task; let item;
+    item = say(r.e, 'Você foi mencionado. Tarefa criada: “' + t.title + '”' + (t.due ? ' · prazo ' + t.due.split('-').reverse().join('/') : ''), 'ok', [
+      { label: 'Ver tarefas', fn: () => { S.pane = 'tasks'; renderAll(false, true); } },
+      { label: 'Desfazer', fn: () => { S.tasks = S.tasks.filter((x) => x.id !== t.id); S.mentions[k] = 'm'; persist(); item.text = 'Tarefa desfeita.'; item.variant = ''; item.actions = null; renderAll(false, false); } }]);
+    if (!manual && made.length === 1) toast('Você foi mencionado', t.title, () => focusEmail(r.e.id));
+  }
+  if (!manual && made.length > 1) toast('Você foi mencionado ' + made.length + ' vezes', 'Criei ' + made.length + ' tarefas', () => { S.pane = 'tasks'; renderAll(false, true); });
+  if (found || manual) renderAll(false, !!made.length);
+  if (manual) toast('Busca de menções', found ? found + (found === 1 ? ' menção encontrada' : ' menções encontradas') + (made.length ? '; ' + made.length + ' virou tarefa' : '') : (fail ? 'Não consegui ler alguns e-mails' : 'Nenhuma menção nova'), null);
 }
 function actDelete(e) {
   interacted = true; out(e, 'Excluir e-mail');
@@ -637,7 +697,7 @@ async function actAsk(q) {
 /* ============ renderização ============ */
 function filteredEmails() {
   let l = shownEmails();
-  if (S.filter === 'unread') l = l.filter((e) => e.unread); else if (S.filter === 'alta') l = l.filter((e) => prioOf(e) === 'alta'); else if (S.filter === 'anexo') l = l.filter((e) => e.attach);
+  if (S.filter === 'unread') l = l.filter((e) => e.unread); else if (S.filter === 'alta') l = l.filter((e) => prioOf(e) === 'alta'); else if (S.filter === 'anexo') l = l.filter((e) => e.attach); else if (S.filter === 'mencao') l = l.filter(isMention);
   const q = S.q.trim().toLowerCase(); if (q) l = l.filter((e) => (e.subject + ' ' + e.fromName + ' ' + e.from + ' ' + e.preview).toLowerCase().includes(q));
   return l;
 }
@@ -671,12 +731,13 @@ function renderHeader() {
 }
 function renderChips() {
   const box = $('#chips'); box.replaceChildren(); box.hidden = S.pane !== 'emails'; if (S.pane !== 'emails') return;
-  const sh = shownEmails(); const counts = { all: sh.length, unread: sh.filter((e) => e.unread).length, alta: sh.filter((e) => prioOf(e) === 'alta').length, anexo: sh.filter((e) => e.attach).length };
-  for (const [k, l] of [['all', 'Todas'], ['unread', 'Não lidas'], ['alta', 'Prioridade alta'], ['anexo', 'Com anexo']])
+  const sh = shownEmails(); const counts = { all: sh.length, unread: sh.filter((e) => e.unread).length, alta: sh.filter((e) => prioOf(e) === 'alta').length, anexo: sh.filter((e) => e.attach).length, mencao: sh.filter(isMention).length };
+  for (const [k, l] of [['all', 'Todas'], ['unread', 'Não lidas'], ['alta', 'Prioridade alta'], ['anexo', 'Com anexo'], ['mencao', '@ Menções']])
     box.append(el('button', { class: 'chip', type: 'button', 'aria-pressed': S.filter === k ? 'true' : 'false', onclick: () => { S.filter = k; renderAll(false, true); } }, l, el('small', { text: counts[k] || '' })));
 }
 function renderBanner() {
   const b = $('#banner'); b.replaceChildren();
+  if (!myAliases().length && !S.demo) b.append(el('div', { class: 'banner' }, 'Quer que e-mails com @seunome virem tarefas? Diga seu nome nas configurações.', el('button', { class: 'btn sm', type: 'button', onclick: openSettings }, 'Configurar')));
   if (S.demo) b.append(el('div', { class: 'banner' }, el('b', { text: 'Modo demonstração.' }), 'Estes e-mails são fictícios. Abra o app dentro do Claude, com o conector Microsoft 365 ligado, para ver sua caixa real.'));
   else if (S.connState === 'err' || S.connState === 'approve' || S.connState === 'warn') b.append(el('div', { class: 'banner err' }, el('b', { text: S.connState === 'warn' ? 'Atenção:' : 'Não conectou:' }), S.connMsg || 'Falha ao ler o Outlook.', el('button', { class: 'btn sm', type: 'button', onclick: () => { interacted = true; manualFetch(); } }, S.connState === 'approve' ? 'Aprovar e carregar' : 'Tentar de novo')));
 }
@@ -696,7 +757,7 @@ function quote(e, item) {
 function emailBubble(e) {
   const k = K(e.id), pr = prioOf(e), pm = S.prio[k] && S.prio[k].m;
   const prLine = pr === 'alta' ? ['alta', 'Prioridade alta'] : pr === 'media' ? ['media', 'Prioridade média'] : pr === 'baixa' ? ['baixa', 'Prioridade baixa'] : null;
-  const tags = []; if (e.unread) tags.push(el('span', { class: 'tag unread', text: 'Não lido' })); if (e.attach) tags.push(el('span', { class: 'tag', text: '📎 Anexo' })); if (isListMail(e)) tags.push(el('span', { class: 'tag', text: 'Lista' })); if (isMeetingReply(e)) tags.push(el('span', { class: 'tag', text: 'Resposta de reunião' }));
+  const tags = []; if (isMention(e)) tags.push(el('span', { class: 'tag unread', text: '@ Menção' })); if (e.unread) tags.push(el('span', { class: 'tag unread', text: 'Não lido' })); if (e.attach) tags.push(el('span', { class: 'tag', text: '📎 Anexo' })); if (isListMail(e)) tags.push(el('span', { class: 'tag', text: 'Lista' })); if (isMeetingReply(e)) tags.push(el('span', { class: 'tag', text: 'Resposta de reunião' }));
   const main = [];
   if (e.link) main.push(bbtn('Abrir e-mail', { href: e.link, icon: 'ext' }));
   main.push(bbtn('Resumir', { icon: 'spark', onclick: () => actSummarize(e) }));
@@ -854,6 +915,7 @@ function openMenu(anchor) {
   const box = el('div', { class: 'menu', role: 'menu' },
     item('refresh', 'Atualizar agora', () => $('#btnRefresh').click()),
     item('cal', 'Resumo do dia', () => { interacted = true; doDigest(); }), item('tasks', 'Tarefas', () => { S.pane = 'tasks'; renderAll(false, true); }),
+    item('search', 'Procurar menções (@) nos recentes', () => { interacted = true; scanMany(shownEmails().slice(0, 25), true); }),
     item('spark', 'Priorizar com IA', () => { interacted = true; runTriage(); }, !sample || S.demo),
     item('eye', S.settings.meetingReplies === 'all' ? 'Ocultar respostas de reunião' : 'Mostrar respostas de reunião', () => { S.settings.meetingReplies = S.settings.meetingReplies === 'all' ? 'comment' : 'all'; persist(); renderAll(false, false); }),
     item('gear', 'Configurações', openSettings));
@@ -862,8 +924,8 @@ function openMenu(anchor) {
 }
 function closeMenu() { $('#menu').replaceChildren(); }
 function openSettings() {
-  const m = $('#modal'); m.replaceChildren(); const set = S.settings; let lastInterval = set.interval;
-  const close = () => { m.replaceChildren(); persist(); if (mcp && lastInterval !== set.interval) startWatch(); renderAll(false, false); };
+  const m = $('#modal'); m.replaceChildren(); const set = S.settings; let lastInterval = set.interval; const lastMen = set.mencoes;
+  const close = () => { m.replaceChildren(); if (lastMen !== set.mencoes) for (const k of Object.keys(S.mentions)) if (S.mentions[k] === 'n') delete S.mentions[k]; persist(); if (mcp && lastInterval !== set.interval) startWatch(); renderAll(false, false); };
   const sel = (key, opts) => { const s = el('select', { 'aria-label': key, onchange: (ev) => { set[key] = key === 'interval' ? Number(ev.target.value) : ev.target.value; } }); for (const [v, l] of opts) { const o = el('option', { value: v, text: l }); if (String(set[key]) === String(v)) o.selected = true; s.append(o); } return s; };
   const ta = (key, ph) => { const t = el('textarea', { rows: 2, placeholder: ph, oninput: (ev) => { set[key] = ev.target.value; } }); t.value = set[key] || ''; return t; };
   const txt = (key) => { const i = el('input', { type: 'text', oninput: (ev) => { set[key] = ev.target.value; } }); i.value = set[key] || ''; return i; };
@@ -887,10 +949,12 @@ function openSettings() {
   m.append(el('div', { class: 'modal-bg', onclick: (ev) => { if (ev.target.classList.contains('modal-bg')) close(); } }, el('div', { class: 'modal', role: 'dialog', 'aria-modal': 'true', 'aria-label': 'Configurações' },
     el('h2', { text: 'Configurações' }), el('p', { class: 'note', text: S.demo ? 'Modo demonstração.' : (storeMode === 'db' ? 'Suas configurações e tarefas ficam salvas na sua conta.' : (storeMode === 'local' ? 'Ficam salvas só neste navegador.' : 'Neste modo, nada fica salvo depois que você fechar.')) }),
     el('div', { class: 'field' }, el('label', { text: 'Respostas de reunião (aceito, recusado, provisório)' }), sel('meetingReplies', [['comment', 'Mostrar só as que têm comentário escrito'], ['hide', 'Esconder todas'], ['all', 'Mostrar todas']])),
+    el('div', { class: 'field' }, el('label', { text: 'Como você aparece nas menções com @' }), txt('mencoes'), el('div', { class: 'note', text: 'Nomes separados por vírgula, sem o @ (ex.: amanda, amanda veloso). Cada pessoa que usar o app define o seu.' })),
+    el('div', { class: 'field' }, chk('mencaoAuto', 'Quando eu for mencionado com @, criar a tarefa automaticamente')),
     el('div', { class: 'field' }, el('label', { text: 'Conferir novos e-mails a cada' }), sel('interval', [[30, '30 segundos'], [60, '1 minuto'], [120, '2 minutos'], [300, '5 minutos']]), el('div', { class: 'note', text: 'O app confere enquanto estiver aberto.' })),
     el('div', { class: 'field' }, el('label', { text: 'Quando avisar' }), sel('notifyMode', [['all', 'Todo e-mail novo'], ['vip', 'Só VIPs e prioridade alta'], ['none', 'Não avisar']])),
     el('div', { class: 'field' }, el('label', { text: 'VIPs (sempre avisar)' }), ta('vip', 'nomes ou e-mails, separados por vírgula')),
-    el('div', { class: 'field' }, el('label', { text: 'Silenciar (nunca avisar)' }), ta('mute', 'remetentes ou palavras do assunto, como [Lista-Geral]')),
+    el('div', { class: 'field' }, el('label', { text: 'Silenciar (nunca avisar)' }), ta('mute', 'remetentes ou palavras do assunto, como [Fiocruz-l]')),
     el('div', { class: 'field' }, chk('sound', 'Tocar um som curto ao chegar e-mail')),
     el('div', { class: 'field' }, chk('autoTriage', 'Classificar a prioridade dos e-mails novos com IA')),
     el('div', { class: 'field' }, el('label', { text: 'Contexto para a IA (quem é você)' }), txt('perfil')),
@@ -908,6 +972,7 @@ function demoEmails() {
     mk(3, 'rh@exemplo.org', 'Recursos Humanos', '[Lista Geral] Calendário de fim de ano', 'Informamos o funcionamento da instituição nos feriados de dezembro. Detalhes no anexo.', 120, true, true),
     mk(4, 'ti@exemplo.org', 'Suporte de TI', 'Manutenção programada no sábado', 'O sistema ficará indisponível entre 8h e 12h para atualização.', 300, false, false),
     mk(5, 'colega@exemplo.org', 'Rafael Lima', 'Aceito: Alinhamento semanal', '', 330, false, false),
+    mk(7, 'colega3@exemplo.org', 'Marina Costa', 'Pauta da reunião de quinta', 'Oi pessoal! @Amanda preparar a pauta e enviar até sexta, por favor. Obrigada!', 20, true, false),
     mk(6, 'colega2@exemplo.org', 'Paula Nunes', 'Recusado: Revisão do painel', 'Oi, nesse horário estou em outra reunião. Podemos sexta pela manhã?', 400, false, false)
   ];
 }
