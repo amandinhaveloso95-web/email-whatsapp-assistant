@@ -31,6 +31,10 @@ Princípios:
 3. **Notificar pouco.** Prioridade visível, agrupamento por conversa e resumo diário.
 4. **Privacidade primeiro.** Dados sensíveis são removidos antes de chegar à IA (veja [docs/seguranca-privacidade.md](docs/seguranca-privacidade.md)).
 
+## Versão em app (sem WhatsApp)
+
+Em [app/](app/) há uma versão que substitui o WhatsApp por um app com visual de conversa, ligado ao Outlook pelo Claude. Veja [app/README.md](app/README.md).
+
 ## Status
 
 | Parte | Situação |
