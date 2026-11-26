@@ -1,0 +1,946 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Central de E-mails</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script type="application/json" id="claude-artifacts-manifest">{"permissions":["notifications","menu-bar"]}</script>
+<style>
+/* ===== Tokens (sistema de design) ===== */
+:root{
+  /* cor */
+  --bg:#eaf3f0; --surface:#ffffff; --surface-2:#f5faf8; --ink:#14201d; --muted:#5b6d68; --line:#dfeae6;
+  --accent:#0f9d84; --accent-strong:#0a7a67; --accent-soft:#e1f5ef; --bubble-out:#d6f4e7;
+  --alta:#c2410c; --alta-soft:#fde9df; --media:#9a6200; --media-soft:#fbefcf; --baixa:#5b6d68; --baixa-soft:#eaf0ee;
+  --danger:#b42318; --ok:#12805c;
+  --wall:rgba(15,157,132,.08);
+  /* tipografia */
+  --font:"Inter",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --fs-xs:12px; --fs-sm:13px; --fs-md:14.5px; --fs-lg:17px; --fs-xl:20px;
+  /* espaço (base 4) */
+  --s1:4px; --s2:8px; --s3:12px; --s4:16px; --s5:24px; --s6:32px;
+  /* forma e elevação */
+  --r-sm:10px; --r-md:16px; --r-pill:999px;
+  --sh-1:0 1px 1px rgba(16,32,28,.05),0 1px 3px rgba(16,32,28,.06);
+  --sh-2:0 8px 28px rgba(16,32,28,.14);
+  --tap:44px;
+}
+@media (prefers-color-scheme:dark){
+  :root{--bg:#0d1514;--surface:#16211f;--surface-2:#1b2826;--ink:#e6efec;--muted:#9bb0aa;--line:#26352f;
+    --accent:#2dd4b4;--accent-strong:#3fe0c1;--accent-soft:#12312c;--bubble-out:#134b3d;
+    --alta:#fb923c;--alta-soft:#3a2214;--media:#facc15;--media-soft:#33290b;--baixa:#9bb0aa;--baixa-soft:#202e2a;
+    --danger:#f87171;--ok:#4ade80;--wall:rgba(45,212,180,.07);--sh-1:0 1px 2px rgba(0,0,0,.4);--sh-2:0 8px 28px rgba(0,0,0,.5)}
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;overflow:hidden}
+body{background:var(--bg);color:var(--ink);font:var(--fs-md)/1.5 var(--font);-webkit-font-smoothing:antialiased}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+a{color:var(--accent-strong)}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:8px}
+[hidden]{display:none!important}
+svg.i.dots{stroke-width:3.2}
+svg.i{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;flex:none}
+
+/* ===== Estrutura ===== */
+#app{height:100vh;height:100dvh;display:grid;grid-template-columns:minmax(300px,360px) 1fr;max-width:1400px;margin:0 auto;background:var(--surface);box-shadow:var(--sh-1)}
+#side{display:flex;flex-direction:column;border-right:1px solid var(--line);min-height:0;background:var(--surface)}
+.side-head{display:flex;align-items:center;gap:var(--s3);padding:var(--s4);min-height:64px}
+.logo{width:36px;height:36px;border-radius:12px;background:var(--accent);color:#fff;display:grid;place-items:center;flex:none}
+.side-head h1{margin:0;font-size:var(--fs-lg);font-weight:700;letter-spacing:-.01em;flex:1}
+.ib{width:var(--tap);height:var(--tap);border-radius:50%;border:0;background:transparent;display:grid;place-items:center;color:var(--ink)}
+.ib:hover{background:var(--surface-2)}
+#chatlist{overflow:auto;flex:1;padding:var(--s1) var(--s2) var(--s4)}
+.ci{display:grid;grid-template-columns:48px 1fr auto;gap:0 var(--s3);align-items:center;width:100%;text-align:left;border:0;background:transparent;border-radius:var(--r-md);padding:var(--s3);min-height:72px}
+.ci:hover{background:var(--surface-2)}
+.ci[aria-current="true"]{background:var(--accent-soft)}
+.av{width:48px;height:48px;border-radius:50%;display:grid;place-items:center;color:#fff;font-weight:600;flex:none}
+.av.bot{background:var(--accent)}
+.av.sm{width:32px;height:32px;font-size:var(--fs-xs)}
+.ci-name{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ci-prev{grid-column:2;color:var(--muted);font-size:var(--fs-sm);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ci-meta{grid-row:1/3;grid-column:3;display:flex;flex-direction:column;align-items:flex-end;gap:6px;align-self:stretch;justify-content:center}
+.ci-time{font-size:var(--fs-xs);color:var(--muted)}
+.badge{min-width:22px;height:22px;border-radius:11px;background:var(--accent);color:#fff;font-size:var(--fs-xs);font-weight:700;display:grid;place-items:center;padding:0 7px}
+.badge.alert{background:var(--alta)}
+.side-foot{padding:var(--s3) var(--s4);color:var(--muted);font-size:var(--fs-xs);border-top:1px solid var(--line)}
+
+#conv{display:flex;flex-direction:column;min-height:0;min-width:0;position:relative;background:var(--bg)}
+.conv-head{display:flex;align-items:center;gap:var(--s2);padding:var(--s2) var(--s3);min-height:64px;background:var(--surface);border-bottom:1px solid var(--line)}
+.conv-head .back{display:none}
+.conv-title{flex:1;min-width:0;line-height:1.25}
+.conv-title b{display:block;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.conv-title span{font-size:var(--fs-sm);color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block}
+.conv-title span.ok::before{content:"";display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--accent);margin-right:6px}
+.conv-title span.err{color:var(--alta)}
+#searchrow{padding:var(--s2) var(--s3);background:var(--surface);border-bottom:1px solid var(--line)}
+.field-in{width:100%;border:1px solid var(--line);background:var(--surface-2);border-radius:var(--r-pill);padding:10px 16px;min-height:var(--tap)}
+#chips{display:flex;gap:var(--s2);overflow-x:auto;padding:var(--s2) var(--s3);background:var(--surface);border-bottom:1px solid var(--line);scrollbar-width:none}
+#chips::-webkit-scrollbar{display:none}
+.chip{flex:none;border:1px solid var(--line);background:var(--surface);border-radius:var(--r-pill);padding:6px 14px;font-weight:500;font-size:var(--fs-sm);min-height:36px;color:var(--ink)}
+.chip[aria-pressed="true"]{background:var(--accent-soft);border-color:var(--accent);color:var(--accent-strong);font-weight:600}
+.chip small{margin-left:6px;color:var(--muted);font-weight:600}
+#banner:empty{display:none}
+.banner{margin:var(--s3) var(--s3) 0;padding:var(--s3) var(--s4);border-radius:var(--r-md);background:var(--media-soft);display:flex;gap:var(--s3);align-items:center;flex-wrap:wrap;font-size:var(--fs-sm)}
+.banner.err{background:var(--alta-soft)}
+
+/* ===== Mensagens ===== */
+.msgs{flex:1;min-height:0;overflow-y:auto;padding:var(--s4) var(--s3) var(--s5);background-image:radial-gradient(var(--wall) 1.2px,transparent 1.2px);background-size:24px 24px;scroll-behavior:smooth}
+.msgs>*{max-width:720px;margin-left:auto;margin-right:auto}
+.row{display:flex;gap:var(--s2);margin:var(--s2) auto;align-items:flex-end}
+.row.out{justify-content:flex-end}
+.row.bot{padding-left:40px}
+.bubble{position:relative;background:var(--surface);border:1px solid var(--line);box-shadow:var(--sh-1);border-radius:var(--r-md);border-top-left-radius:4px;max-width:min(560px,100%);min-width:0;overflow:hidden}
+.row.out .bubble{background:var(--bubble-out);border-color:transparent;border-top-left-radius:var(--r-md);border-top-right-radius:4px;box-shadow:none}
+.bubble.flash{animation:flash 1.4s ease-out}
+@keyframes flash{0%,40%{box-shadow:0 0 0 3px var(--accent)}100%{box-shadow:var(--sh-1)}}
+.bp{padding:var(--s3) var(--s4) var(--s2)}
+.row.out .bp{padding:var(--s2) var(--s4)}
+.pr{font-size:var(--fs-xs);font-weight:600;display:flex;align-items:center;gap:6px;margin-bottom:2px;color:var(--muted)}
+.pr .dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:currentColor}
+.pr.alta{color:var(--alta)} .pr.media{color:var(--media)} .pr.baixa{color:var(--baixa)}
+.tag.unread{background:var(--accent-soft);color:var(--accent-strong)}
+.who{font-weight:600;font-size:var(--fs-sm)}
+.subj{font-weight:600;margin:2px 0}
+.prev{color:var(--muted);font-size:var(--fs-sm);display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+.tags{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
+.tag{font-size:var(--fs-xs);font-weight:600;padding:2px 8px;border-radius:var(--r-pill);background:var(--baixa-soft);color:var(--muted)}
+.foot{display:flex;justify-content:flex-end;align-items:center;gap:6px;font-size:11px;color:var(--muted);padding:0 var(--s4) var(--s2);margin-top:2px}
+.ticks{color:var(--accent-strong);font-weight:700;letter-spacing:-2px}
+.bbtns{border-top:1px solid var(--line)}
+.bbtn{display:flex;align-items:center;justify-content:center;gap:var(--s2);width:100%;min-height:var(--tap);border:0;border-top:1px solid var(--line);background:transparent;color:var(--accent-strong);font-weight:600;font-size:var(--fs-md);text-decoration:none;padding:0 var(--s4)}
+.bbtns>.bbtn:first-child{border-top:0}
+.bbtn:hover{background:var(--surface-2)}
+.bbtn.danger{color:var(--danger)}
+.bbtns.two{display:grid;grid-template-columns:1fr 1fr}
+.bbtns.two>.bbtn{border-top:0}
+.bbtns.two>.bbtn+.bbtn{border-left:1px solid var(--line)}
+.bbtn.quiet{color:var(--muted);font-weight:500;font-size:var(--fs-sm);min-height:40px;border-top:1px solid var(--line)}
+.bbtn[disabled]{opacity:.5;cursor:default}
+.quote{border-left:3px solid var(--accent);background:var(--surface-2);border-radius:6px;padding:6px 10px;margin:0 0 var(--s2);cursor:pointer;font-size:var(--fs-sm);width:100%;text-align:left;border-top:0;border-right:0;border-bottom:0}
+.quote b{display:block;font-size:var(--fs-xs);color:var(--accent-strong)}
+.quote span{color:var(--muted);display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bt{font-weight:700;font-size:var(--fs-xs);letter-spacing:.04em;text-transform:uppercase;color:var(--muted);margin:var(--s2) 0 var(--s1)}
+.bt:first-child{margin-top:0}
+.bubble ul{margin:0 0 var(--s2);padding-left:20px}
+.bubble li{margin:2px 0}
+.bubble p{margin:0 0 var(--s2)}
+.scroll{white-space:pre-wrap;word-break:break-word;max-height:300px;overflow:auto;font-size:var(--fs-sm);background:var(--surface-2);border-radius:var(--r-sm);padding:var(--s3)}
+.err-t{color:var(--danger);font-weight:500}.ok-t{color:var(--ok);font-weight:600}
+.typing{display:inline-flex;gap:4px;padding:6px 2px}
+.typing i{width:7px;height:7px;border-radius:50%;background:var(--muted);opacity:.5;animation:bounce 1.2s infinite}
+.typing i:nth-child(2){animation-delay:.15s}.typing i:nth-child(3){animation-delay:.3s}
+@keyframes bounce{0%,60%,100%{transform:translateY(0);opacity:.4}30%{transform:translateY(-4px);opacity:1}}
+.tones{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 var(--s2)}
+.tone{border:1px solid var(--line);background:var(--surface);border-radius:var(--r-pill);padding:4px 12px;font-size:var(--fs-sm);font-weight:500;min-height:36px}
+.tone[aria-pressed="true"]{background:var(--accent);color:#fff;border-color:var(--accent)}
+textarea.draft{width:100%;min-height:160px;border:1px solid var(--line);background:var(--surface-2);border-radius:var(--r-sm);padding:var(--s3);resize:vertical;line-height:1.55;font-size:var(--fs-md)}
+input.tf,input.df{width:100%;border:1px solid var(--line);background:var(--surface-2);border-radius:var(--r-sm);padding:10px 12px;min-height:var(--tap);margin-bottom:var(--s2)}
+.sep{display:flex;justify-content:center;margin:var(--s4) auto var(--s2)}
+.pill{background:var(--surface);border:1px solid var(--line);box-shadow:var(--sh-1);border-radius:var(--r-pill);padding:4px 14px;font-size:var(--fs-xs);font-weight:600;color:var(--muted)}
+.pill.new{background:var(--accent-soft);color:var(--accent-strong);border-color:transparent}
+button.pill{cursor:pointer;min-height:32px}
+button.pill:hover{background:var(--surface-2)}
+#fab{position:absolute;right:var(--s4);bottom:92px;width:44px;height:44px;border-radius:50%;border:1px solid var(--line);background:var(--surface);box-shadow:var(--sh-2);display:grid;place-items:center;color:var(--ink)}
+#fab .badge{position:absolute;top:-8px;right:-4px}
+
+/* ===== Composer ===== */
+#composer{background:var(--surface);border-top:1px solid var(--line);padding:var(--s2) var(--s3) calc(var(--s2) + env(safe-area-inset-bottom))}
+.qr{display:flex;gap:var(--s2);overflow-x:auto;padding-bottom:var(--s2);scrollbar-width:none}
+.qr::-webkit-scrollbar{display:none}
+.cmp{display:flex;gap:var(--s2);align-items:center}
+.cmp input[type=text]{flex:1;min-width:0;border:1px solid var(--line);background:var(--surface-2);border-radius:var(--r-pill);padding:10px 18px;min-height:var(--tap)}
+.cmp input[type=date]{border:1px solid var(--line);background:var(--surface-2);border-radius:var(--r-pill);padding:8px 12px;min-height:var(--tap)}
+.send{width:var(--tap);height:var(--tap);border-radius:50%;border:0;background:var(--accent);color:#fff;display:grid;place-items:center;flex:none}
+.send:hover{filter:brightness(1.06)}
+.send[disabled]{opacity:.5}
+
+/* ===== Tarefas e resumo ===== */
+.task{display:grid;grid-template-columns:28px 1fr auto;gap:var(--s3);align-items:center;background:var(--surface);border:1px solid var(--line);border-radius:var(--r-md);padding:var(--s3) var(--s4);margin:var(--s2) auto;box-shadow:var(--sh-1)}
+.task input{width:22px;height:22px;accent-color:var(--accent)}
+.task.done .tt{text-decoration:line-through;color:var(--muted)}
+.tt{font-weight:600}.note{font-size:var(--fs-sm);color:var(--muted)}
+.mini{border:1px solid var(--line);background:var(--surface);border-radius:var(--r-pill);padding:4px 12px;font-size:var(--fs-sm);font-weight:600;color:var(--accent-strong);text-decoration:none;min-height:32px;display:inline-flex;align-items:center}
+.mini.danger{color:var(--danger)}
+.empty{text-align:center;color:var(--muted);padding:var(--s6) var(--s4)}
+
+/* ===== Toast, menu, modal ===== */
+#toasts{position:fixed;bottom:132px;right:var(--s5);display:flex;flex-direction:column;gap:var(--s2);z-index:70;max-width:min(380px,calc(100vw - 32px))}
+.toast{display:flex;gap:var(--s3);align-items:center;background:var(--surface);color:var(--ink);border:1px solid var(--line);border-left:4px solid var(--accent);border-radius:var(--r-md);padding:var(--s3) var(--s4);box-shadow:var(--sh-2);cursor:pointer;text-align:left;animation:slide .25s ease-out}
+.toast b{display:block;font-size:var(--fs-sm)}.toast span{font-size:var(--fs-sm);color:var(--muted);display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:280px}
+@keyframes slide{from{transform:translateY(-10px);opacity:0}to{transform:none;opacity:1}}
+#menu{position:fixed;z-index:65}
+.menu{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-md);box-shadow:var(--sh-2);padding:var(--s1);min-width:230px}
+.mi{display:flex;gap:var(--s3);align-items:center;width:100%;border:0;background:transparent;text-align:left;padding:10px 12px;border-radius:var(--r-sm);min-height:var(--tap)}
+.mi:hover{background:var(--surface-2)}
+.modal-bg{position:fixed;inset:0;background:rgba(8,16,14,.5);z-index:80;display:grid;place-items:center;padding:var(--s4)}
+.modal{background:var(--surface);border-radius:20px;max-width:560px;width:100%;max-height:92vh;overflow:auto;padding:var(--s5);box-shadow:var(--sh-2)}
+.modal h2{margin:0 0 var(--s1)}
+.field{margin:var(--s4) 0}.field label{display:block;font-weight:600;font-size:var(--fs-sm);margin-bottom:6px}
+.field select,.field textarea,.field input[type=text]{width:100%;border:1px solid var(--line);background:var(--surface-2);border-radius:var(--r-sm);padding:10px 12px;min-height:var(--tap)}
+.check{display:flex;gap:var(--s3);align-items:center;font-weight:500}.check input{width:22px;height:22px;accent-color:var(--accent)}
+.btn{border:1px solid var(--line);background:var(--surface);border-radius:var(--r-sm);padding:10px 16px;font-weight:600;min-height:var(--tap);display:inline-flex;align-items:center;gap:var(--s2)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+.btn.sm{min-height:36px;padding:6px 12px;font-size:var(--fs-sm)}
+.sticky{position:sticky;bottom:calc(var(--s5) * -1);background:var(--surface);padding:var(--s3) 0 var(--s1)}
+
+/* ===== Celular ===== */
+@media (max-width:860px){
+  #app{grid-template-columns:1fr;position:relative}
+  #side,#conv{grid-area:1/1}
+  #app[data-mobile="chat"] #side{display:none}
+  #app[data-mobile="list"] #conv{display:none}
+  .conv-head .back{display:grid}
+  .row.bot{padding-left:0}
+  .msgs{padding-left:var(--s2);padding-right:var(--s2)}
+  #toasts{left:var(--s3);right:var(--s3);max-width:none;bottom:150px}
+  #btnRefresh{display:none}
+  .chip{min-height:40px}
+  .ib{width:40px;height:40px}
+}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;scroll-behavior:auto!important}}
+</style>
+</head>
+<body>
+<div id="app" data-mobile="chat">
+  <aside id="side" aria-label="Conversas">
+    <header class="side-head">
+      <div class="logo" aria-hidden="true"><svg class="i" viewBox="0 0 24 24"><path d="M3 8l9 6 9-6"/><path d="M4 5h16a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1z"/></svg></div>
+      <h1>Central de E-mails</h1>
+      <button class="ib" id="btnSettings" aria-label="Configurações" title="Configurações"></button>
+    </header>
+    <div id="chatlist"></div>
+    <div class="side-foot" id="sidefoot"></div>
+  </aside>
+  <section id="conv" aria-label="Conversa">
+    <header class="conv-head">
+      <button class="ib back" id="btnBack" aria-label="Voltar para a lista"></button>
+      <div id="headav"></div>
+      <div class="conv-title"><b id="headname"></b><span id="headsub"></span></div>
+      <button class="ib" id="btnSearch" aria-label="Buscar nos e-mails" title="Buscar"></button>
+      <button class="ib" id="btnRefresh" aria-label="Atualizar agora" title="Atualizar agora"></button>
+      <button class="ib" id="btnMore" aria-label="Mais opções" title="Mais opções" aria-haspopup="menu"></button>
+    </header>
+    <div id="searchrow" hidden><input class="field-in" id="q" type="text" placeholder="Buscar remetente, assunto ou prévia" aria-label="Buscar nos e-mails"></div>
+    <div id="chips" role="group" aria-label="Filtros"></div>
+    <div id="banner"></div>
+    <div class="msgs" id="msgs" role="log" aria-label="Mensagens"></div>
+    <button id="fab" hidden aria-label="Ir para as mensagens mais recentes"></button>
+    <footer id="composer"></footer>
+  </section>
+</div>
+<div id="toasts" aria-live="polite"></div>
+<div id="menu"></div>
+<div id="modal"></div>
+
+<script type="module">
+/* ============ utilidades ============ */
+const MS = 'Microsoft 365';
+const $ = (s) => document.querySelector(s);
+const ICONS = {
+  back: 'M15 18l-6-6 6-6', refresh: 'M20 11a8 8 0 1 0-2.3 5.6M20 4v7h-7', search: 'M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16zM21 21l-4.3-4.3',
+  more: 'M12 5.5h.01M12 12h.01M12 18.5h.01', send: 'M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z', ext: 'M14 3h7v7M10 14L21 3M21 14v5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5',
+  mail: 'M3 8l9 6 9-6M4 5h16a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1z', tasks: 'M9 11l3 3L22 4M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11',
+  cal: 'M8 2v4M16 2v4M3 10h18M5 4h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z', spark: 'M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z',
+  reply: 'M9 14L4 9l5-5M4 9h10a6 6 0 0 1 6 6v3', trash: 'M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6', doc: 'M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9zM14 3v6h6M8 13h8M8 17h8',
+  mute: 'M13.7 21a2 2 0 0 1-3.4 0M18 8a6 6 0 0 0-9.3-5M6 8c0 7-3 9-3 9h14M2 2l20 20', down: 'M12 5v14M19 12l-7 7-7-7', plus: 'M12 5v14M5 12h14',
+  gear: 'M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.9.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.9-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.9V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z',
+  eye: 'M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12zM12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z'
+};
+function icon(name) {
+  const s = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  s.setAttribute('viewBox', '0 0 24 24'); s.setAttribute('class', name === 'more' ? 'i dots' : 'i'); s.setAttribute('aria-hidden', 'true');
+  const p = document.createElementNS('http://www.w3.org/2000/svg', 'path'); p.setAttribute('d', ICONS[name] || ''); s.append(p); return s;
+}
+function el(tag, attrs, ...kids) {
+  const e = document.createElement(tag);
+  if (attrs) for (const [k, v] of Object.entries(attrs)) {
+    if (v == null || v === false) continue;
+    if (k === 'class') e.className = v;
+    else if (k === 'text') e.textContent = v;
+    else if (k.startsWith('on')) e.addEventListener(k.slice(2), v);
+    else e.setAttribute(k, v === true ? '' : v);
+  }
+  for (const kid of kids.flat()) { if (kid == null || kid === false) continue; e.append(kid.nodeType ? kid : document.createTextNode(String(kid))); }
+  return e;
+}
+const K = (s) => { let h = 5381; s = String(s); for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) | 0; return (h >>> 0).toString(36); };
+const terms = (s) => String(s || '').split(/[,;\n]/).map((x) => x.trim().toLowerCase()).filter(Boolean);
+const safeLink = (u) => (typeof u === 'string' && u.startsWith('https://')) ? u : null;
+const useCap = (n) => (window.claude && window.claude.use) ? window.claude.use(n).catch(() => null) : Promise.resolve(null);
+const sameDay = (a, b) => new Date(a).toDateString() === new Date(b).toDateString();
+function fmtClock(d) { const x = new Date(d); return isNaN(x) ? '' : x.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }); }
+function fmtList(d) {
+  const x = new Date(d); if (isNaN(x)) return ''; const n = new Date();
+  if (sameDay(x, n)) return fmtClock(x);
+  const y = new Date(n); y.setDate(n.getDate() - 1); if (sameDay(x, y)) return 'Ontem';
+  return x.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+}
+function fmtDay(d) {
+  const x = new Date(d), n = new Date(); if (sameDay(x, n)) return 'Hoje';
+  const y = new Date(n); y.setDate(n.getDate() - 1); if (sameDay(x, y)) return 'Ontem';
+  return x.toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' });
+}
+const COLORS = ['#0f766e', '#7c3aed', '#c2410c', '#1d4ed8', '#be185d', '#4d7c0f', '#0e7490', '#a16207'];
+const colorOf = (s) => COLORS[parseInt(K(s), 36) % COLORS.length];
+const initials = (n) => (String(n || '?').replace(/[^\p{L}\s]/gu, ' ').trim().split(/\s+/).slice(0, 2).map((w) => w[0] || '').join('') || '?').toUpperCase();
+function htmlToText(s) {
+  try { s = String(s).replace(/<br\s*\/?>/gi, '\n').replace(/<\/(p|div|tr|li|h[1-6]|blockquote)>/gi, '\n'); const d = new DOMParser().parseFromString(s, 'text/html'); d.querySelectorAll('style,script,head').forEach((n) => n.remove()); return (d.body.textContent || '').replace(/ /g, ' ').replace(/\n{3,}/g, '\n\n').trim(); }
+  catch { return String(s); }
+}
+function beep() { try { const a = new (window.AudioContext || window.webkitAudioContext)(); const o = a.createOscillator(), g = a.createGain(); o.type = 'sine'; o.frequency.value = 880; g.gain.value = 0.05; o.connect(g); g.connect(a.destination); o.start(); o.stop(a.currentTime + 0.13); setTimeout(() => a.close(), 400); } catch {} }
+function friendly(err) {
+  const c = err && err.code;
+  const m = {
+    needs_reauth: 'A conexão com o Microsoft 365 expirou. Reconecte em claude.ai → Configurações → Conectores.',
+    server_not_connected: 'Não encontrei o conector Microsoft 365. Adicione em claude.ai → Configurações → Conectores.',
+    selection_required: 'Há mais de um conector com esse nome. Escolha qual usar quando o Claude perguntar.',
+    not_in_manifest: 'Você não permitiu esse acesso para o app. Toque em atualizar para pedir de novo.',
+    consent_required: 'Falta sua permissão para o app acessar o Outlook. Toque em atualizar para pedir de novo.',
+    blocked_by_policy: 'A política da sua organização bloqueia essa ação.',
+    approval_required: 'Essa ação precisa da sua aprovação. Toque de novo para aprovar.',
+    not_granted: 'Esse recurso não está liberado para esta visualização.',
+    capability_disabled: 'Esse recurso não está disponível aqui.',
+    rate_limited: 'Muitas chamadas seguidas. Espere alguns segundos e tente de novo.',
+    server_unavailable: 'O Outlook está instável agora. Tente de novo em instantes.',
+    upstream_error: 'Algo falhou do lado do serviço. Tente de novo em instantes.',
+    tool_error: 'O Outlook respondeu com erro: ' + String((err && err.message) || '').slice(0, 160),
+    cancelled: 'A ação foi cancelada.'
+  };
+  return m[c] || ('Não deu certo: ' + String((err && err.message) || err || 'erro desconhecido').slice(0, 160));
+}
+
+/* ============ estado ============ */
+const DEFAULTS = {
+  interval: 60, notifyMode: 'all', sound: true, mute: '', vip: '', meetingReplies: 'comment',
+  perfil: 'a pessoa dona desta caixa de entrada (edite em Configurações com sua profissão e contexto)', assinatura: 'Seu nome', autoTriage: false
+};
+const S = {
+  emails: [], older: [], connState: 'init', connMsg: '', lastOk: null, demo: false, canMore: true, loadingMore: false,
+  pane: 'emails', filter: 'all', q: '', searchOpen: false,
+  tasks: [], seen: {}, prio: {}, sums: {}, digest: null, settings: { ...DEFAULTS },
+  log: [], newKeys: new Set(), pendingBelow: 0
+};
+const B = {}; // cache de corpo e id da conversa por e-mail
+const bstate = (e) => (B[K(e.id)] ||= {});
+let mcp = null, sample = null, desktop = null, db = null, uid = null, stopWatch = null;
+let desktopNotif = false, interacted = false, baselineDone = false, storeMode = 'none', LOGID = 0;
+
+/* ============ persistência ============ */
+const persistData = () => ({ tasks: S.tasks.slice(0, 200), seen: S.seen, prio: S.prio, sums: S.sums, digest: S.digest, settings: S.settings, v: 2 });
+function trimMaps() { const cap = (o, n) => { const ks = Object.keys(o); if (ks.length > n) for (const k of ks.slice(0, ks.length - n)) delete o[k]; }; cap(S.seen, 500); cap(S.prio, 200); cap(S.sums, 30); }
+function applyLoaded(d) {
+  if (!d || typeof d !== 'object') return;
+  S.tasks = Array.isArray(d.tasks) ? d.tasks : []; S.seen = d.seen || {}; S.prio = d.prio || {}; S.sums = d.sums || {};
+  S.digest = d.digest && !d.digest.loading ? d.digest : null; S.settings = { ...DEFAULTS, ...(d.settings || {}) };
+}
+let saveTimer = null, saving = false, dirty = false;
+function persist() { dirty = true; clearTimeout(saveTimer); saveTimer = setTimeout(flush, 900); }
+async function flush() {
+  if (saving || !dirty) return; saving = true; dirty = false; trimMaps(); const data = persistData();
+  try {
+    if (db && uid) await db.doc('data/users/' + uid + '/state').set(data);
+    else if (storeMode === 'local') localStorage.setItem('central-emails-v2', JSON.stringify(data));
+  } catch (e) {}
+  saving = false; if (dirty) persist();
+}
+async function loadState() {
+  try {
+    const userCap = await useCap('user');
+    uid = userCap && userCap.id ? await userCap.id().catch(() => null) : null;
+    db = await useCap('db');
+    if (db && uid) { const snap = await db.doc('data/users/' + uid + '/state').get(); if (snap.exists) applyLoaded(snap.data()); storeMode = 'db'; return; }
+  } catch (e) { db = null; }
+  try { const raw = localStorage.getItem('central-emails-v2'); if (raw) applyLoaded(JSON.parse(raw)); storeMode = 'local'; } catch { storeMode = 'none'; }
+}
+
+/* ============ e-mails: leitura e normalização ============ */
+function parseResult(result) {
+  const out = [];
+  const walk = (v) => {
+    if (typeof v === 'string') { try { walk(JSON.parse(v)); } catch {} return; }
+    if (Array.isArray(v)) { v.forEach(walk); return; }
+    if (v && typeof v === 'object') {
+      if (v.id && v.subject !== undefined) { out.push(v); return; }
+      for (const key of ['value', 'results', 'messages', 'emails', 'items']) if (Array.isArray(v[key])) { v[key].forEach(walk); return; }
+    }
+  };
+  if (result && Array.isArray(result.content)) for (const b of result.content) if (b && b.type === 'text') walk(b.text);
+  if (!out.length) walk(result && result.payload);
+  const ids = new Set(); return out.filter((x) => (ids.has(x.id) ? false : (ids.add(x.id), true)));
+}
+function normEmail(x) {
+  return {
+    id: String(x.id), uri: x.uri || ('mail:///messages/' + encodeURIComponent(x.id)), subject: x.subject || '(sem assunto)',
+    from: x.sender || '', fromName: x.senderName || x.sender || 'Desconhecido', to: x.recipients || [],
+    date: x.receivedDateTime || x.sentDateTime || '', preview: String(x.summary || '').replace(/\s+/g, ' ').trim(),
+    unread: x.isRead === false, attach: !!x.hasAttachments, imp: x.importance || 'normal', link: safeLink(x.webLink)
+  };
+}
+const isListMail = (e) => /^\s*\[[^\]]{2,40}\]/.test(e.subject) || e.to.some((a) => /(^|[.@-])(lista|list|newsletter|noreply|no-reply)/i.test(a));
+
+/* respostas de reunião (aceito, recusado, provisório) */
+const RESP_SUBJ = /^\s*(aceito|aceita|recusado|recusada|provis[óo]ri[oa]|accepted|declined|tentative|tentatively accepted)\s*:/i;
+const RESP_PHRASE = /\bfoi\s+(aceit[oa]|recusad[oa]|declinad[oa])\s+por\b|\b(aceitou|recusou|declinou)\s+o\s+convite\b|\b(accepted|declined)\s+(the|your)\s+(invitation|meeting)\b/i;
+const isMeetingReply = (e) => RESP_SUBJ.test(e.subject) || RESP_PHRASE.test(e.subject) || RESP_PHRASE.test(e.preview.slice(0, 180));
+function hasComment(e) {
+  const head = e.preview.trim().slice(0, 220);
+  if (head.length < 25) return false;
+  if (/^[_\-=]{3,}/.test(head) || /notice:|confidential|confidencialidade|disclaimer/i.test(head) || RESP_PHRASE.test(head)) return false;
+  return true;
+}
+function isShown(e) {
+  if (!isMeetingReply(e)) return true;
+  const m = S.settings.meetingReplies || 'comment';
+  return m === 'all' || (m === 'comment' && hasComment(e));
+}
+const allEmails = () => { const m = new Map(); for (const e of [...S.emails, ...S.older]) m.set(e.id, e); return [...m.values()].sort((a, b) => new Date(b.date) - new Date(a.date)); };
+const shownEmails = () => allEmails().filter(isShown);
+const hiddenCount = () => allEmails().filter((e) => !isShown(e)).length;
+const prioOf = (e) => (S.prio[K(e.id)] && S.prio[K(e.id)].p) || (e.imp === 'high' ? 'alta' : '');
+
+/* ============ conexão com o Outlook ============ */
+function setConn(state, msg) { S.connState = state; S.connMsg = msg || ''; renderHeader(); renderBanner(); }
+function startWatch() {
+  if (!mcp) return;
+  if (stopWatch) { try { stopWatch(); } catch {} stopWatch = null; }
+  setConn('connecting');
+  try {
+    stopWatch = mcp.watchTool(MS, 'outlook_email_search', { order: 'newest', limit: 25 }, (ev) => {
+      if (ev.type === 'data') { onEmails(parseResult(ev.result)); setConn('ok'); } else onMcpError(ev.error);
+    }, { refetchInterval: Math.max(30, Number(S.settings.interval) || 60) * 1000 });
+  } catch (err) { onMcpError(err); }
+}
+function onMcpError(err) {
+  const c = err && err.code;
+  if (c === 'server_unavailable' || c === 'upstream_error') { setConn(allEmails().length ? 'warn' : 'err', allEmails().length ? 'Sem conexão no momento. Mostrando o último estado.' : friendly(err)); return; }
+  setConn(c === 'approval_required' ? 'approve' : 'err', friendly(err));
+}
+async function manualFetch() {
+  if (!mcp) return;
+  try { setConn('connecting'); const r = await mcp.callTool(MS, 'outlook_email_search', { order: 'newest', limit: 25 }, { cache: { refresh: true } }); onEmails(parseResult(r)); setConn('ok'); if (!stopWatch) startWatch(); }
+  catch (err) { onMcpError(err); }
+}
+async function loadOlder() {
+  if (!mcp || S.loadingMore) return; S.loadingMore = true; renderChat();
+  try {
+    const have = allEmails().length;
+    const r = await mcp.callTool(MS, 'outlook_email_search', { order: 'newest', limit: 25, offset: have });
+    const list = parseResult(r).map(normEmail);
+    if (list.length < 25) S.canMore = false;
+    S.older = [...S.older, ...list];
+    list.forEach((e) => { S.seen[K(e.id)] = 1; }); persist();
+  } catch (err) { toast('Não consegui carregar', friendly(err), null); }
+  S.loadingMore = false; renderAll(false, true);
+}
+function onEmails(list) {
+  const emails = list.map(normEmail).sort((a, b) => new Date(b.date) - new Date(a.date));
+  S.emails = emails; S.lastOk = new Date();
+  const fresh = emails.filter((e) => !S.seen[K(e.id)]);
+  if (!baselineDone) {
+    baselineDone = true;
+    if (Object.keys(S.seen).length === 0) { emails.forEach((e) => { S.seen[K(e.id)] = 1; }); persist(); }
+    else { notifyNew(fresh.filter((e) => e.unread && isShown(e))); fresh.forEach((e) => { S.seen[K(e.id)] = 1; }); }
+  } else { notifyNew(fresh.filter((e) => e.unread && isShown(e))); fresh.forEach((e) => { S.seen[K(e.id)] = 1; }); }
+  if (fresh.length) persist();
+  if (S.settings.autoTriage && sample && fresh.length) runTriage(fresh.filter(isShown).slice(0, 15), true);
+  renderAll(false, false);
+}
+
+/* ============ avisos ============ */
+function shouldNotify(e) {
+  const m = S.settings.notifyMode; if (m === 'none') return false;
+  const hay = (e.fromName + ' ' + e.from + ' ' + e.subject).toLowerCase();
+  if (terms(S.settings.mute).some((t) => hay.includes(t))) return false;
+  if (m === 'vip') return terms(S.settings.vip).some((t) => hay.includes(t)) || prioOf(e) === 'alta';
+  return true;
+}
+async function notifyNew(items) {
+  const list = items.filter(shouldNotify); if (!list.length) return;
+  list.forEach((e) => S.newKeys.add(K(e.id)));
+  if (list.length > 3) toast(list.length + ' novos e-mails', 'Toque para ver', () => focusEmail(list[0].id));
+  else for (const e of list) toast(e.fromName, e.subject, () => focusEmail(e.id));
+  if (S.settings.sound && interacted) beep();
+  if (desktopNotif && desktop && desktop.notification) {
+    try { await desktop.notification.show({ body: (list.length > 1 ? list.length + ' novos e-mails — ' : '') + list[0].fromName + ': ' + list[0].subject.slice(0, 120) }); } catch {}
+  }
+}
+function toast(title, body, onclick) {
+  const t = el('button', { class: 'toast', type: 'button', onclick: () => { t.remove(); interacted = true; onclick && onclick(); } }, el('div', {}, el('b', { text: title }), el('span', { text: body })));
+  $('#toasts').append(t); setTimeout(() => t.remove(), 9000);
+  while ($('#toasts').children.length > 3) $('#toasts').firstChild.remove();
+}
+const newCount = () => [...S.newKeys].filter((k) => shownEmails().some((e) => K(e.id) === k)).length;
+function updateBadges() {
+  const n = newCount();
+  document.title = (n ? '(' + n + ') ' : '') + 'Central de E-mails';
+  if (desktop && desktop.app && desktop.app.dock) desktop.app.dock.setBadge(n ? String(n) : '').catch(() => {});
+  updateTray(n);
+}
+async function updateTray(n) {
+  if (!desktop || !desktop.tray || !desktopNotif) return;
+  try { await desktop.tray.set({ title: n ? '✉ ' + n : '✉', toolTip: n ? n + ' e-mails novos' : 'Nenhum e-mail novo', menu: [{ label: n ? n + ' novos' : 'Tudo em dia', enabled: false }, { label: 'Abrir Central de E-mails', click: () => desktop.window.show().catch(() => {}) }] }); } catch {}
+}
+
+/* ============ IA ============ */
+function parseJsonLoose(t) { const m = String(t).match(/[\[{][\s\S]*[\]}]/); return JSON.parse(m ? m[0] : t); }
+async function askJson(input, opts) { if (!sample) throw { code: 'not_granted', message: 'IA indisponível' }; if (typeof sample.json === 'function') return sample.json(input, opts); const r = await sample(input, opts); return parseJsonLoose(r.text); }
+async function askText(input, opts) { if (!sample) throw { code: 'not_granted', message: 'IA indisponível' }; const r = await sample(input, opts); return String(r.text || '').trim(); }
+const PRIO = ['alta', 'media', 'baixa'];
+const normPrio = (p) => { p = String(p || '').toLowerCase().replace('é', 'e'); return PRIO.includes(p) ? p : 'media'; };
+const arr = (x) => (Array.isArray(x) ? x.map(String).filter(Boolean) : []);
+async function runTriage(list, silent) {
+  const items = (list || shownEmails().filter((e) => !S.prio[K(e.id)])).slice(0, 25);
+  if (!items.length) { if (!silent) toast('Prioridades em dia', 'Todos os e-mails já foram classificados', null); return; }
+  const lines = items.map((e, i) => (i + 1) + '. De: ' + e.fromName + ' | Assunto: ' + e.subject + ' | Prévia: ' + e.preview.slice(0, 200)).join('\n');
+  const prompt = 'Você classifica e-mails para ' + S.settings.perfil + '. Para cada e-mail, defina a prioridade: "alta" (exige ação ou resposta com prazo próximo, vem de chefia/decisão, é urgente), "media" (precisa de atenção em breve) ou "baixa" (informativo, lista de distribuição, newsletter, aviso geral). Responda APENAS com JSON no formato {"itens":[{"n":1,"p":"alta|media|baixa","m":"motivo em até 8 palavras"}]}.\n\nE-mails:\n' + lines;
+  try {
+    if (!silent) { S.busy = true; renderHeader(); }
+    const out = await askJson(prompt, { modelTier: 'quick' });
+    const itens = Array.isArray(out) ? out : (out && out.itens) || [];
+    for (const it of itens) { const e = items[(Number(it.n) || 0) - 1]; if (e) S.prio[K(e.id)] = { p: normPrio(it.p), m: String(it.m || '').slice(0, 80) }; }
+    S.settings.autoTriage = true; persist(); renderAll(false, false);
+    if (!silent) toast('Prioridades atualizadas', itens.length + ' e-mails classificados', null);
+  } catch (err) { if (!silent) toast('Não consegui priorizar', friendly(err), null); }
+  finally { S.busy = false; renderHeader(); }
+}
+function deepFind(obj, key, depth = 0) {
+  if (!obj || typeof obj !== 'object' || depth > 5) return null;
+  if (typeof obj[key] === 'string' && obj[key]) return obj[key];
+  for (const v of Object.values(obj)) { const r = deepFind(v, key, depth + 1); if (r) return r; }
+  return null;
+}
+async function ensureBody(e) {
+  const u = bstate(e); if (u.body) return u.body;
+  if (S.demo || !mcp) { u.body = e.preview; return u.body; }
+  const r = await mcp.callTool(MS, 'read_resource', { uri: e.uri });
+  let p = r.payload, txt = '';
+  if (typeof p === 'string') { try { p = JSON.parse(p); } catch {} }
+  if (typeof p === 'string') txt = p;
+  else if (p && typeof p === 'object') {
+    const b = p.body;
+    txt = (b && typeof b === 'object' ? (b.content || '') : (typeof b === 'string' ? b : '')) || p.bodyText || p.text || p.content || deepFind(p, 'content') || '';
+    u.conversationId = deepFind(p, 'conversationId');
+  }
+  if (!txt && Array.isArray(r.content)) txt = r.content.filter((c) => c && c.type === 'text').map((c) => c.text).join('\n');
+  if (!u.conversationId && Array.isArray(r.content)) { const m = r.content.map((c) => c.text || '').join('\n').match(/"?conversationId"?\s*[:=]\s*"([^"]+)"/); if (m) u.conversationId = m[1]; }
+  if (/<\/?(html|body|div|p|br|table|span)\b/i.test(txt)) txt = htmlToText(txt);
+  u.body = txt.trim().slice(0, 12000) || e.preview || '(sem conteúdo de texto)';
+  return u.body;
+}
+const emailBlock = (e, body) => 'Assunto: ' + e.subject + '\nDe: ' + e.fromName + ' <' + e.from + '>\nData: ' + new Date(e.date).toLocaleString('pt-BR') + '\n\nCorpo:\n' + body.slice(0, 6000);
+
+/* ============ conversa: registro de mensagens ============ */
+function addLog(item) { item.id = 'l' + (++LOGID); item.t = item.t || Date.now(); S.log.push(item); return item; }
+function rmLog(item) { S.log = S.log.filter((x) => x !== item); }
+const out = (e, text) => addLog({ kind: 'out', eid: e && e.id, text });
+const typingFor = (e) => addLog({ kind: 'typing', eid: e && e.id });
+const say = (e, text, variant, actions) => addLog({ kind: 'text', eid: e && e.id, text, variant, actions });
+const eById = (id) => allEmails().find((x) => x.id === id);
+
+async function actSummarize(e) {
+  if (S.log.some((x) => x.kind === 'typing' && x.eid === e.id)) return;
+  interacted = true; out(e, 'Resumir'); const k = K(e.id);
+  if (S.sums[k]) { addLog({ kind: 'summary', eid: e.id, sum: S.sums[k] }); renderChat(true); return; }
+  const ty = typingFor(e); renderAll(false, true);
+  try {
+    const body = await ensureBody(e);
+    const prompt = 'Você é o assistente de e-mails de ' + S.settings.perfil + '. Resuma o e-mail abaixo em português do Brasil, de forma objetiva, sem inventar nada que não esteja no texto. Responda APENAS com JSON: {"resumo":["até 4 pontos curtos"],"acoes":["ações que o dono da caixa precisa tomar; lista vazia se nenhuma"],"prazo":"prazo ou data citada, ou null","prioridade":"alta|media|baixa","precisa_resposta":true,"tarefa":"título curto de tarefa sugerida, ou null"}\n\n' + emailBlock(e, body);
+    const o = await askJson(prompt, { modelTier: 'default' });
+    const sum = { resumo: arr(o.resumo), acoes: arr(o.acoes), prazo: o.prazo && o.prazo !== 'null' ? String(o.prazo) : '', prioridade: normPrio(o.prioridade), resp: !!o.precisa_resposta, tarefa: o.tarefa && o.tarefa !== 'null' ? String(o.tarefa) : '' };
+    S.sums[k] = sum; if (!S.prio[k]) S.prio[k] = { p: sum.prioridade, m: '' }; persist();
+    rmLog(ty); addLog({ kind: 'summary', eid: e.id, sum });
+  } catch (err) { rmLog(ty); say(e, friendly(err), 'err', [{ label: 'Tentar de novo', fn: () => actSummarize(e) }]); }
+  renderAll(false, true);
+}
+async function actRead(e) {
+  interacted = true; out(e, 'Ler e-mail completo'); const ty = typingFor(e); renderChat(true);
+  try { const body = await ensureBody(e); rmLog(ty); addLog({ kind: 'body', eid: e.id, text: body }); }
+  catch (err) { rmLog(ty); say(e, friendly(err), 'err'); }
+  renderChat(true);
+}
+const TONES = { cordial: 'cordial e profissional', formal: 'formal e institucional', curta: 'direta e bem curta (no máximo 4 linhas)', duvida: 'cordial, pedindo os esclarecimentos que faltam antes de agir' };
+const TONE_LABELS = { cordial: 'Cordial', formal: 'Formal', curta: 'Curta', duvida: 'Pedir esclarecimento' };
+async function actReply(e, tone, item) {
+  interacted = true;
+  if (!item) { out(e, 'Sugerir resposta'); item = addLog({ kind: 'reply', eid: e.id, tone: tone || 'cordial', state: 'loading', text: '' }); }
+  else { item.tone = tone || item.tone; item.state = 'loading'; item.msg = ''; }
+  renderChat(true);
+  try {
+    const body = await ensureBody(e); const sum = S.sums[K(e.id)];
+    const ctx = sum ? '\nResumo já feito: ' + sum.resumo.join(' / ') + (sum.acoes.length ? '\nAções esperadas: ' + sum.acoes.join(' / ') : '') : '';
+    const prompt = 'Escreva uma resposta ao e-mail abaixo, em português do Brasil, em nome de ' + S.settings.perfil + '. Tom: ' + TONES[item.tone] + '. Regras: não invente fatos, datas, valores nem compromissos que não estejam no e-mail; se faltar uma informação que só a pessoa sabe, deixe um marcador entre colchetes, como [confirmar data]. Comece com uma saudação adequada e termine com "Atenciosamente," e o nome "' + S.settings.assinatura + '". Responda somente com o texto da mensagem, sem comentários e sem linha de assunto.' + ctx + '\n\n' + emailBlock(e, body);
+    item.text = await askText(prompt, { modelTier: 'default', cache: false }); item.state = 'ready';
+  } catch (err) { item.state = 'error'; item.msg = friendly(err); }
+  renderChat(item.state === 'ready');
+}
+const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+const textToHtml = (t) => String(t).trim().split(/\n{2,}/).map((p) => '<p>' + esc(p).replace(/\n/g, '<br>') + '</p>').join('');
+async function actSaveDraft(e, item) {
+  item.state = 'saving'; renderChat(false);
+  try {
+    const r = await mcp.callTool(MS, 'outlook_create_reply_draft', { messageId: e.id, body: textToHtml(item.text || ''), bodyType: 'html' });
+    const link = safeLink(r.payload && typeof r.payload === 'object' ? (r.payload.webLink || deepFind(r.payload, 'webLink')) : null);
+    item.state = 'ready'; say(e, 'Rascunho salvo na pasta Rascunhos do Outlook. Nada foi enviado.', 'ok', link ? [{ label: 'Abrir rascunho', href: link }] : null);
+  } catch (err) { item.state = 'ready'; say(e, friendly(err), 'err'); }
+  renderChat(true);
+}
+function actTask(e) {
+  interacted = true; out(e, 'Adicionar às tarefas'); const sum = S.sums[K(e.id)];
+  addLog({ kind: 'taskform', eid: e.id, title: (sum && sum.tarefa) || ('Responder: ' + e.subject), due: '' }); renderChat(true);
+}
+function addTask(title, due, e) {
+  S.tasks.unshift({ id: 't' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), title: title.trim(), due: due || '', done: false, eid: e ? e.id : '', subject: e ? e.subject : '', link: e ? (e.link || '') : '', created: new Date().toISOString() });
+  persist(); renderList();
+}
+function actDelete(e) {
+  interacted = true; out(e, 'Excluir e-mail');
+  addLog({ kind: 'confirm', eid: e.id, text: 'Mover esta conversa para Itens Excluídos? Dá para recuperar pelo Outlook.' }); renderChat(true);
+}
+async function doTrash(e, item) {
+  rmLog(item); const ty = typingFor(e); renderChat(true);
+  try {
+    await ensureBody(e); const u = bstate(e);
+    if (!u.conversationId) throw { code: 'tool_error', message: 'não consegui identificar a conversa deste e-mail; exclua pelo Outlook' };
+    await mcp.callTool(MS, 'outlook_trash_thread', { conversationId: u.conversationId });
+    S.emails = S.emails.filter((x) => x.id !== e.id); S.older = S.older.filter((x) => x.id !== e.id);
+    rmLog(ty); say(e, 'Conversa movida para Itens Excluídos.', 'ok');
+    try { await mcp.invalidate(MS, 'outlook_email_search'); } catch {}
+  } catch (err) { rmLog(ty); say(e, friendly(err), 'err'); }
+  renderAll(false, true);
+}
+function actMute(e) { const t = e.from || e.fromName; S.settings.mute = (S.settings.mute ? S.settings.mute + ', ' : '') + t; persist(); toast('Remetente silenciado', 'Não vou mais avisar sobre ' + t, null); }
+async function doDigest() {
+  S.pane = 'digest'; renderAll(false, true);
+  const today = new Date().toDateString();
+  let items = shownEmails().filter((e) => new Date(e.date).toDateString() === today); if (!items.length) items = shownEmails().slice(0, 15); items = items.slice(0, 30);
+  if (!items.length) { S.digest = { t: new Date().toISOString(), text: '', err: 'Ainda não há e-mails carregados.' }; renderConv(); return; }
+  S.digest = { t: new Date().toISOString(), text: '', loading: true }; renderConv();
+  const lines = items.map((e, i) => (i + 1) + '. [' + (e.unread ? 'não lido' : 'lido') + '] ' + e.fromName + ' — ' + e.subject + ' — ' + e.preview.slice(0, 160)).join('\n');
+  const prompt = 'Faça o resumo do dia da caixa de entrada de ' + S.settings.perfil + ', em português do Brasil, curto e escaneável. Use exatamente estas seções, cada uma como uma linha começando com "## ": "## Precisa de ação", "## Para acompanhar", "## Só informativo". Em cada seção, use linhas começando com "- ", citando remetente e assunto em poucas palavras. Omita seções vazias. Não invente nada além do que está nas prévias.\n\nE-mails:\n' + lines;
+  try { const text = await askText(prompt, { modelTier: 'default', cache: false }); S.digest = { t: new Date().toISOString(), text }; persist(); }
+  catch (err) { S.digest = { t: new Date().toISOString(), text: '', err: friendly(err) }; }
+  renderList(); if (S.pane === 'digest') renderConv();
+}
+async function actAsk(q) {
+  interacted = true; S.pane = 'emails'; addLog({ kind: 'out', text: q }); const ty = typingFor(null); renderAll(false, true);
+  try {
+    const lines = shownEmails().slice(0, 25).map((e, i) => (i + 1) + '. [' + (e.unread ? 'não lido' : 'lido') + '] ' + fmtList(e.date) + ' — ' + e.fromName + ' — ' + e.subject + ' — ' + e.preview.slice(0, 140)).join('\n');
+    const prompt = 'Você é o assistente de e-mails de ' + S.settings.perfil + '. Responda em português do Brasil, de forma curta e direta, usando SOMENTE os e-mails listados abaixo (não invente nada; se não der para responder com eles, diga isso). Cite remetente e assunto quando citar um e-mail.\n\nPergunta: ' + q + '\n\nE-mails recentes:\n' + lines;
+    const text = await askText(prompt, { modelTier: 'default', cache: false }); rmLog(ty); addLog({ kind: 'answer', text });
+  } catch (err) { rmLog(ty); say(null, friendly(err), 'err'); }
+  renderAll(false, true);
+}
+
+/* ============ renderização ============ */
+function filteredEmails() {
+  let l = shownEmails();
+  if (S.filter === 'unread') l = l.filter((e) => e.unread); else if (S.filter === 'alta') l = l.filter((e) => prioOf(e) === 'alta'); else if (S.filter === 'anexo') l = l.filter((e) => e.attach);
+  const q = S.q.trim().toLowerCase(); if (q) l = l.filter((e) => (e.subject + ' ' + e.fromName + ' ' + e.from + ' ' + e.preview).toLowerCase().includes(q));
+  return l;
+}
+function renderList() {
+  const box = $('#chatlist'); box.replaceChildren();
+  const last = shownEmails()[0], n = newCount(), open = S.tasks.filter((t) => !t.done).length;
+  const item = (key, av, name, prev, time, badge, alert) => el('button', { class: 'ci', type: 'button', 'aria-current': S.pane === key ? 'true' : 'false', onclick: () => { S.pane = key; $('#app').dataset.mobile = 'chat'; renderAll(false, true); } },
+    av, el('div', { class: 'ci-name', text: name }), el('div', { class: 'ci-prev', text: prev }),
+    el('div', { class: 'ci-meta' }, el('span', { class: 'ci-time', text: time || '' }), badge ? el('span', { class: 'badge' + (alert ? ' alert' : ''), text: badge }) : null));
+  box.append(item('emails', el('div', { class: 'av bot' }, icon('mail')), 'Assistente de E-mails', last ? last.fromName + ': ' + last.subject : 'Conectando ao Outlook…', last ? fmtList(last.date) : '', n || ''));
+  box.append(item('tasks', el('div', { class: 'av', style: 'background:#0e7490' }, icon('tasks')), 'Tarefas', open ? open + (open === 1 ? ' aberta' : ' abertas') : 'Nenhuma tarefa aberta', '', open || ''));
+  box.append(item('digest', el('div', { class: 'av', style: 'background:#7c3aed' }, icon('cal')), 'Resumo do dia', S.digest && S.digest.text ? 'Gerado às ' + fmtClock(S.digest.t) : 'Toque para gerar', '', ''));
+  $('#sidefoot').textContent = S.demo ? 'Modo demonstração: e-mails fictícios.' : (storeMode === 'db' ? 'Tarefas e preferências salvas na sua conta.' : 'Tarefas e preferências salvas só neste navegador.');
+}
+function renderHeader() {
+  const av = $('#headav'), nm = $('#headname'), sub = $('#headsub'); av.replaceChildren();
+  const titles = { emails: ['Assistente de E-mails', 'mail', 'bot'], tasks: ['Tarefas', 'tasks', ''], digest: ['Resumo do dia', 'cal', ''] };
+  const [name, ic, cls] = titles[S.pane]; nm.textContent = name;
+  av.append(el('div', { class: 'av ' + cls, style: cls ? '' : 'background:' + (S.pane === 'tasks' ? '#0e7490' : '#7c3aed') }, icon(ic)));
+  const typing = S.log.some((x) => x.kind === 'typing') || S.busy;
+  let txt = '', cls2 = '';
+  if (S.pane !== 'emails') txt = S.pane === 'tasks' ? (() => { const n = S.tasks.filter((t) => !t.done).length; return n === 1 ? '1 aberta' : n + ' abertas'; })() : 'Gerado sob demanda';
+  else if (typing) { txt = 'digitando…'; cls2 = 'ok'; }
+  else if (S.demo) txt = 'Modo demonstração';
+  else if (S.connState === 'ok') { txt = (window.innerWidth < 600 ? 'Conectado · ' : 'Outlook conectado · atualizado ') + fmtClock(S.lastOk); cls2 = 'ok'; }
+  else if (S.connState === 'connecting' || S.connState === 'init') txt = 'Conectando ao Outlook…';
+  else if (S.connState === 'warn') txt = 'Sem atualizar agora'; else if (S.connState === 'approve') txt = 'Aguardando sua aprovação'; else { txt = 'Sem conexão com o Outlook'; cls2 = 'err'; }
+  sub.textContent = txt; sub.className = cls2;
+  $('#btnSearch').hidden = S.pane !== 'emails'; $('#btnRefresh').hidden = S.pane !== 'emails';
+  $('#searchrow').hidden = !(S.pane === 'emails' && S.searchOpen);
+}
+function renderChips() {
+  const box = $('#chips'); box.replaceChildren(); box.hidden = S.pane !== 'emails'; if (S.pane !== 'emails') return;
+  const sh = shownEmails(); const counts = { all: sh.length, unread: sh.filter((e) => e.unread).length, alta: sh.filter((e) => prioOf(e) === 'alta').length, anexo: sh.filter((e) => e.attach).length };
+  for (const [k, l] of [['all', 'Todas'], ['unread', 'Não lidas'], ['alta', 'Prioridade alta'], ['anexo', 'Com anexo']])
+    box.append(el('button', { class: 'chip', type: 'button', 'aria-pressed': S.filter === k ? 'true' : 'false', onclick: () => { S.filter = k; renderAll(false, true); } }, l, el('small', { text: counts[k] || '' })));
+}
+function renderBanner() {
+  const b = $('#banner'); b.replaceChildren();
+  if (S.demo) b.append(el('div', { class: 'banner' }, el('b', { text: 'Modo demonstração.' }), 'Estes e-mails são fictícios. Abra o app dentro do Claude, com o conector Microsoft 365 ligado, para ver sua caixa real.'));
+  else if (S.connState === 'err' || S.connState === 'approve' || S.connState === 'warn') b.append(el('div', { class: 'banner err' }, el('b', { text: S.connState === 'warn' ? 'Atenção:' : 'Não conectou:' }), S.connMsg || 'Falha ao ler o Outlook.', el('button', { class: 'btn sm', type: 'button', onclick: () => { interacted = true; manualFetch(); } }, S.connState === 'approve' ? 'Aprovar e carregar' : 'Tentar de novo')));
+}
+
+/* --- blocos de mensagem --- */
+function foot(t, ticks) { return el('div', { class: 'foot' }, fmtClock(t), ticks ? el('span', { class: 'ticks', text: '✓✓' }) : null); }
+function bbtn(label, o) {
+  const kids = [o.icon ? icon(o.icon) : null, label];
+  if (o.href) return el('a', { class: 'bbtn', href: o.href, target: '_blank', rel: 'noopener noreferrer' }, kids);
+  return el('button', { class: 'bbtn' + (o.danger ? ' danger' : ''), type: 'button', disabled: o.disabled, onclick: o.onclick }, kids);
+}
+function quote(e, item) {
+  const mail = e || (item && item.eid && eById(item.eid));
+  if (!mail) return null;
+  return el('button', { class: 'quote', type: 'button', onclick: () => focusEmail(mail.id), 'aria-label': 'Ir para o e-mail original' }, el('b', { text: mail.fromName }), el('span', { text: mail.subject }));
+}
+function emailBubble(e) {
+  const k = K(e.id), pr = prioOf(e), pm = S.prio[k] && S.prio[k].m;
+  const prLine = pr === 'alta' ? ['alta', 'Prioridade alta'] : pr === 'media' ? ['media', 'Prioridade média'] : pr === 'baixa' ? ['baixa', 'Prioridade baixa'] : null;
+  const tags = []; if (e.unread) tags.push(el('span', { class: 'tag unread', text: 'Não lido' })); if (e.attach) tags.push(el('span', { class: 'tag', text: '📎 Anexo' })); if (isListMail(e)) tags.push(el('span', { class: 'tag', text: 'Lista' })); if (isMeetingReply(e)) tags.push(el('span', { class: 'tag', text: 'Resposta de reunião' }));
+  const main = [];
+  if (e.link) main.push(bbtn('Abrir e-mail', { href: e.link, icon: 'ext' }));
+  main.push(bbtn('Resumir', { icon: 'spark', onclick: () => actSummarize(e) }));
+  const extra = isListMail(e) ? el('div', { class: 'bbtns' }, el('button', { class: 'bbtn quiet', type: 'button', onclick: () => actMute(e) }, icon('mute'), 'Silenciar este remetente')) : null;
+  return el('div', { class: 'row', id: 'em-' + k },
+    el('div', { class: 'av sm', style: 'background:' + colorOf(e.from || e.fromName), 'aria-hidden': 'true', text: initials(e.fromName) }),
+    el('div', { class: 'bubble' }, el('div', { class: 'bp' },
+      prLine ? el('div', { class: 'pr ' + prLine[0] }, el('span', { class: 'dot' }), prLine[1], pm ? el('span', { style: 'font-weight:400', text: '· ' + pm }) : null) : null,
+      el('div', { class: 'who', style: 'color:' + colorOf(e.from || e.fromName), text: e.fromName }),
+      el('div', { class: 'subj', text: e.subject }), e.preview ? el('div', { class: 'prev', text: e.preview }) : null, tags.length ? el('div', { class: 'tags' }, tags) : null),
+      foot(e.date, false), el('div', { class: 'bbtns two' }, main), extra));
+}
+function logRow(l) {
+  const e = l.eid ? eById(l.eid) : null; const q = quote(e, l);
+  if (l.kind === 'out') return el('div', { class: 'row out' }, el('div', { class: 'bubble' }, el('div', { class: 'bp', text: l.text }), foot(l.t, true)));
+  if (l.kind === 'typing') return el('div', { class: 'row bot' }, el('div', { class: 'bubble' }, el('div', { class: 'bp' }, el('div', { class: 'typing', 'aria-label': 'Digitando' }, el('i'), el('i'), el('i')))));
+  const rowOf = (...parts) => el('div', { class: 'row bot', id: 'lg-' + l.id }, el('div', { class: 'bubble' }, parts));
+  if (l.kind === 'answer') return rowOf(el('div', { class: 'bp' }, ...l.text.split(/\n{2,}/).map((p) => el('p', { text: p })), el('div', { style: 'height:0' })), foot(l.t, false));
+  if (l.kind === 'text') {
+    const acts = (l.actions || []).map((a) => a.href ? bbtn(a.label, { href: a.href, icon: 'ext' }) : bbtn(a.label, { onclick: a.fn }));
+    return rowOf(el('div', { class: 'bp' }, q, el('div', { class: l.variant === 'err' ? 'err-t' : l.variant === 'ok' ? 'ok-t' : '', text: (l.variant === 'ok' ? '✔ ' : '') + l.text })), foot(l.t, false), acts.length ? el('div', { class: 'bbtns' }, acts) : null);
+  }
+  if (l.kind === 'body') return rowOf(el('div', { class: 'bp' }, q, el('div', { class: 'bt', text: 'Texto do e-mail' }), el('div', { class: 'scroll', text: l.text })), foot(l.t, false));
+  if (l.kind === 'summary') {
+    const s = l.sum;
+    const btns = [bbtn('Sugerir resposta', { icon: 'reply', onclick: () => actReply(e, 'cordial') }), bbtn('Adicionar às tarefas', { icon: 'tasks', onclick: () => actTask(e) }), bbtn('Ler e-mail completo', { icon: 'doc', onclick: () => actRead(e) }), bbtn('Excluir e-mail', { icon: 'trash', danger: true, onclick: () => actDelete(e) })];
+    if (!e) btns.length = 0;
+    return rowOf(el('div', { class: 'bp' }, q, el('div', { class: 'bt', text: '📝 Resumo' }), s.resumo.length ? el('ul', {}, s.resumo.map((x) => el('li', { text: x }))) : el('p', { class: 'note', text: 'Sem pontos relevantes.' }),
+      s.acoes.length ? [el('div', { class: 'bt', text: '✅ O que fazer' }), el('ul', {}, s.acoes.map((x) => el('li', { text: x })))] : el('p', { class: 'note', text: 'Nenhuma ação necessária da sua parte.' }),
+      s.prazo ? el('p', {}, el('b', { text: '⏰ Prazo: ' }), s.prazo) : null,
+      el('p', { class: 'note', text: (s.resp ? 'Parece pedir resposta' : 'Não parece exigir resposta') + ' · prioridade ' + (s.prioridade === 'alta' ? 'alta' : s.prioridade === 'media' ? 'média' : 'baixa') })), foot(l.t, false), btns.length ? el('div', { class: 'bbtns' }, btns) : null);
+  }
+  if (l.kind === 'reply') {
+    const tones = el('div', { class: 'tones', role: 'group', 'aria-label': 'Tom da resposta' }, Object.entries(TONE_LABELS).map(([k, lab]) => el('button', { class: 'tone', type: 'button', 'aria-pressed': l.tone === k ? 'true' : 'false', disabled: l.state === 'loading', onclick: () => actReply(e, k, l), text: lab })));
+    let body;
+    if (l.state === 'loading') body = el('div', { class: 'typing', 'aria-label': 'Escrevendo' }, el('i'), el('i'), el('i'));
+    else if (l.state === 'error') body = el('div', { class: 'err-t', text: l.msg });
+    else { const ta = el('textarea', { class: 'draft', 'aria-label': 'Texto da resposta', oninput: (ev) => { l.text = ev.target.value; } }); ta.value = l.text; body = ta; }
+    const btns = l.state === 'ready' || l.state === 'saving' ? [bbtn(l.state === 'saving' ? 'Salvando…' : 'Salvar como rascunho no Outlook', { icon: 'mail', disabled: S.demo || l.state === 'saving', onclick: () => actSaveDraft(e, l) }),
+      bbtn('Copiar texto', { icon: 'doc', onclick: async (ev) => { const b = ev.currentTarget; try { await navigator.clipboard.writeText(l.text); b.lastChild.textContent = 'Copiado'; } catch { b.lastChild.textContent = 'Selecione e copie (Ctrl+C)'; } } }),
+      bbtn('Descartar', { danger: true, onclick: () => { rmLog(l); renderChat(false); } })] : [bbtn('Descartar', { danger: true, onclick: () => { rmLog(l); renderChat(false); } })];
+    return rowOf(el('div', { class: 'bp' }, q, el('div', { class: 'bt', text: '✍️ Sugestão de resposta' }), tones, body, el('p', { class: 'note', style: 'margin:8px 0 0', text: 'Revise antes de enviar: o app só cria o rascunho, nunca envia sozinho.' })), foot(l.t, false), el('div', { class: 'bbtns' }, btns));
+  }
+  if (l.kind === 'taskform') {
+    const ti = el('input', { class: 'tf', type: 'text', 'aria-label': 'Título da tarefa', oninput: (ev) => { l.title = ev.target.value; } }); ti.value = l.title;
+    const di = el('input', { class: 'df', type: 'date', 'aria-label': 'Prazo', oninput: (ev) => { l.due = ev.target.value; } }); di.value = l.due;
+    return rowOf(el('div', { class: 'bp' }, q, el('div', { class: 'bt', text: '✅ Nova tarefa' }), ti, el('label', { class: 'note', text: 'Prazo (opcional)' }), di), foot(l.t, false),
+      el('div', { class: 'bbtns' }, bbtn('Salvar tarefa', { icon: 'tasks', onclick: () => { if (!l.title.trim()) return; addTask(l.title, l.due, e); rmLog(l); say(e, 'Tarefa adicionada: ' + l.title.trim(), 'ok', [{ label: 'Ver tarefas', fn: () => { S.pane = 'tasks'; renderAll(false, true); } }]); renderAll(false, true); } }), bbtn('Cancelar', { danger: true, onclick: () => { rmLog(l); renderChat(false); } })));
+  }
+  if (l.kind === 'confirm') return rowOf(el('div', { class: 'bp' }, q, el('div', { text: l.text })), foot(l.t, false), el('div', { class: 'bbtns' }, bbtn('Sim, mover para Excluídos', { icon: 'trash', danger: true, onclick: () => doTrash(e, l) }), bbtn('Cancelar', { onclick: () => { rmLog(l); renderChat(false); } })));
+  return null;
+}
+function renderChat(forceBottom) {
+  if (S.pane !== 'emails') return;
+  const box = $('#msgs'); const ae = document.activeElement;
+  if (ae && box.contains(ae) && /^(TEXTAREA|INPUT)$/.test(ae.tagName) && !forceBottom) { S.deferChat = true; return; }
+  S.deferChat = false;
+  const atBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 140, prevTop = box.scrollTop;
+  const frag = document.createDocumentFragment();
+  const emails = filteredEmails(); const ids = new Set(emails.map((e) => e.id)); const all = new Set(allEmails().map((e) => e.id));
+  const items = emails.map((e) => ({ t: new Date(e.date).getTime() || 0, e }));
+  for (const l of S.log) if (S.filter === 'all' && !S.q || !l.eid || ids.has(l.eid) || !all.has(l.eid)) items.push({ t: l.t, l });
+  items.sort((a, b) => a.t - b.t || (a.e ? -1 : 1));
+  if (!S.demo && mcp && S.canMore && !S.q) frag.append(el('div', { class: 'sep' }, el('button', { class: 'pill', type: 'button', disabled: S.loadingMore, onclick: loadOlder, text: S.loadingMore ? 'Carregando…' : 'Carregar mensagens anteriores' })));
+  const hc = hiddenCount();
+  if (hc && S.filter === 'all' && !S.q) frag.append(el('div', { class: 'sep' }, el('button', { class: 'pill', type: 'button', onclick: () => { S.settings.meetingReplies = S.settings.meetingReplies === 'all' ? 'comment' : 'all'; persist(); renderAll(false, false); }, text: '🗓 ' + hc + (hc === 1 ? ' resposta de reunião oculta · mostrar' : ' respostas de reunião ocultas · mostrar') })));
+  else if (S.settings.meetingReplies === 'all' && S.filter === 'all' && !S.q && allEmails().some(isMeetingReply)) frag.append(el('div', { class: 'sep' }, el('button', { class: 'pill', type: 'button', onclick: () => { S.settings.meetingReplies = 'comment'; persist(); renderAll(false, false); }, text: '🗓 Ocultar respostas de reunião sem comentário' })));
+  if (!items.length) frag.append(el('div', { class: 'empty' }, el('b', { text: allEmails().length ? 'Nada por aqui' : (S.connState === 'ok' ? 'Caixa de entrada vazia' : 'Carregando e-mails…') }), el('div', { text: allEmails().length ? 'Nenhum e-mail corresponde a este filtro.' : '' })));
+  let lastDay = null, divDone = false; const nNew = newCount();
+  for (const it of items) {
+    if (!lastDay || !sameDay(lastDay, it.t)) { frag.append(el('div', { class: 'sep' }, el('span', { class: 'pill', text: fmtDay(it.t) }))); lastDay = it.t; }
+    if (it.e) {
+      if (!divDone && nNew && S.newKeys.has(K(it.e.id))) { frag.append(el('div', { class: 'sep' }, el('span', { class: 'pill new', text: nNew + (nNew === 1 ? ' novo e-mail' : ' novos e-mails') }))); divDone = true; }
+      frag.append(emailBubble(it.e));
+    } else { const r = logRow(it.l); if (r) frag.append(r); }
+  }
+  box.replaceChildren(frag);
+  box.style.scrollBehavior = 'auto';
+  if (forceBottom || atBottom || !S.chatShown) box.scrollTop = box.scrollHeight; else box.scrollTop = prevTop;
+  box.style.scrollBehavior = '';
+  S.chatShown = true; updateFab(); scheduleSeen();
+}
+function updateFab() {
+  const box = $('#msgs'), fab = $('#fab'); const away = box.scrollHeight - box.scrollTop - box.clientHeight > 220;
+  fab.hidden = !(S.pane === 'emails' && away); fab.replaceChildren(icon('down'), newCount() && away ? el('span', { class: 'badge', text: newCount() }) : null);
+}
+let seenTimer = null;
+function scheduleSeen() {
+  clearTimeout(seenTimer); if (S.pane !== 'emails' || !S.newKeys.size) return;
+  const box = $('#msgs'); const bottom = box.scrollHeight - box.scrollTop - box.clientHeight < 140;
+  if (bottom && document.visibilityState === 'visible') seenTimer = setTimeout(() => { S.newKeys.clear(); renderList(); updateBadges(); }, 2500);
+}
+function focusEmail(id) {
+  S.pane = 'emails'; S.filter = 'all'; S.q = ''; S.searchOpen = false; $('#q').value = ''; $('#app').dataset.mobile = 'chat'; renderAll(false, false);
+  const e = eById(id); if (!e) return; const n = document.getElementById('em-' + K(id)); if (!n) return;
+  n.scrollIntoView({ block: 'center' }); const b = n.querySelector('.bubble'); b.classList.remove('flash'); void b.offsetWidth; b.classList.add('flash');
+}
+function renderTasksPane() {
+  const box = $('#msgs'); box.replaceChildren();
+  const ts = S.tasks.slice().sort((a, b) => (a.done - b.done) || ((a.due || '9999') > (b.due || '9999') ? 1 : -1));
+  if (!ts.length) box.append(el('div', { class: 'empty' }, el('b', { text: 'Nenhuma tarefa ainda' }), el('div', { text: 'Quando um e-mail pedir uma ação, toque em “Adicionar às tarefas”. Você também pode digitar abaixo.' })));
+  for (const t of ts) {
+    const late = !t.done && t.due && t.due < new Date().toISOString().slice(0, 10);
+    box.append(el('div', { class: 'task' + (t.done ? ' done' : '') },
+      el('input', { type: 'checkbox', checked: t.done, 'aria-label': 'Concluir: ' + t.title, onchange: (ev) => { t.done = ev.target.checked; persist(); renderTasksPane(); renderList(); renderHeader(); } }),
+      el('div', {}, el('div', { class: 'tt', text: t.title }), el('div', { class: 'note' }, t.due ? el('span', { class: late ? 'err-t' : '', text: 'Prazo ' + t.due.split('-').reverse().join('/') + (late ? ' (atrasada)' : '') }) : null, t.subject ? (t.due ? ' · ' : '') + 'E-mail: ' + t.subject : '')),
+      el('div', { style: 'display:flex;gap:6px' }, t.link && safeLink(t.link) ? el('a', { class: 'mini', href: t.link, target: '_blank', rel: 'noopener noreferrer', text: 'Abrir e-mail' }) : null,
+        el('button', { class: 'mini danger', type: 'button', 'aria-label': 'Excluir tarefa: ' + t.title, onclick: () => { S.tasks = S.tasks.filter((x) => x.id !== t.id); persist(); renderTasksPane(); renderList(); renderHeader(); }, text: 'Excluir' }))));
+  }
+}
+function renderDigestPane() {
+  const box = $('#msgs'); box.replaceChildren(); const d = S.digest;
+  const row = (...parts) => el('div', { class: 'row bot', style: 'padding-left:0' }, el('div', { class: 'bubble', style: 'max-width:640px' }, parts));
+  if (!d) { box.append(row(el('div', { class: 'bp' }, el('div', { class: 'bt', text: '📅 Resumo do dia' }), el('p', { text: sample ? 'Posso resumir os e-mails de hoje em três grupos: precisa de ação, para acompanhar e só informativo.' : 'A IA não está disponível nesta visualização.' })), el('div', { class: 'bbtns' }, bbtn('Gerar resumo do dia', { icon: 'spark', disabled: !sample, onclick: () => { interacted = true; doDigest(); } })))); return; }
+  if (d.loading) { box.append(row(el('div', { class: 'bp' }, el('div', { class: 'typing' }, el('i'), el('i'), el('i'))))); return; }
+  if (d.err) { box.append(row(el('div', { class: 'bp' }, el('div', { class: 'err-t', text: d.err })), el('div', { class: 'bbtns' }, bbtn('Tentar de novo', { onclick: () => doDigest() })))); return; }
+  const parts = []; let ul = null;
+  for (const line of d.text.split('\n')) {
+    const s = line.trim(); if (!s) continue;
+    if (s.startsWith('##')) { ul = null; parts.push(el('div', { class: 'bt', text: s.replace(/^#+\s*/, '') })); }
+    else if (/^[-•*]\s+/.test(s)) { if (!ul) { ul = el('ul'); parts.push(ul); } ul.append(el('li', { text: s.replace(/^[-•*]\s+/, '').replace(/\*\*/g, '') })); }
+    else { ul = null; parts.push(el('p', { text: s.replace(/\*\*/g, '') })); }
+  }
+  box.append(row(el('div', { class: 'bp' }, parts), foot(d.t, false), el('div', { class: 'bbtns' }, bbtn('Gerar de novo', { icon: 'refresh', onclick: () => { interacted = true; doDigest(); } }))));
+}
+function renderComposer() {
+  const c = $('#composer'); c.replaceChildren();
+  if (S.pane === 'tasks') {
+    const f = el('form', { class: 'cmp', onsubmit: (ev) => { ev.preventDefault(); const t = f.querySelector('input[type=text]'), d = f.querySelector('input[type=date]'); if (t.value.trim()) { addTask(t.value, d.value, null); renderTasksPane(); renderHeader(); } } },
+      el('input', { type: 'text', placeholder: 'Nova tarefa', 'aria-label': 'Nova tarefa' }), el('input', { type: 'date', 'aria-label': 'Prazo' }), el('button', { class: 'send', type: 'submit', 'aria-label': 'Adicionar tarefa' }, icon('send')));
+    c.append(f); return;
+  }
+  if (S.pane === 'digest') { c.hidden = true; return; }
+  c.hidden = false;
+  const qr = el('div', { class: 'qr' },
+    el('button', { class: 'chip', type: 'button', onclick: () => { interacted = true; doDigest(); }, text: 'Resumo do dia' }),
+    el('button', { class: 'chip', type: 'button', disabled: !sample || S.demo, onclick: () => { interacted = true; runTriage(); }, text: 'Priorizar com IA' }),
+    el('button', { class: 'chip', type: 'button', disabled: !sample, onclick: () => actAsk('Quais e-mails precisam de ação minha?'), text: 'O que precisa de ação?' }));
+  const f = el('form', { class: 'cmp', onsubmit: (ev) => { ev.preventDefault(); const i = f.querySelector('input'); const q = i.value.trim(); if (q) { i.value = ''; actAsk(q); } } },
+    el('input', { type: 'text', placeholder: sample ? 'Pergunte algo sobre seus e-mails' : 'IA indisponível nesta visualização', 'aria-label': 'Pergunte algo sobre seus e-mails', disabled: !sample }), el('button', { class: 'send', type: 'submit', 'aria-label': 'Enviar', disabled: !sample }, icon('send')));
+  c.append(qr, f);
+}
+function renderConv() { renderHeader(); renderChips(); renderBanner(); if (S.pane === 'emails') renderChat(); else if (S.pane === 'tasks') renderTasksPane(); else renderDigestPane(); renderComposer(); updateFab(); }
+function renderAll(rebuildComposer, forceBottom) {
+  renderList(); renderHeader(); renderChips(); renderBanner();
+  if (S.pane === 'emails') renderChat(!!forceBottom); else if (S.pane === 'tasks') renderTasksPane(); else renderDigestPane();
+  const ck = S.pane + '|' + !!sample + '|' + S.demo; if (S.composerKey !== ck) { S.composerKey = ck; renderComposer(); }
+  updateFab(); updateBadges();
+}
+
+/* ============ menu e configurações ============ */
+function openMenu(anchor) {
+  const m = $('#menu'); m.replaceChildren();
+  const item = (ic, label, fn, dis) => el('button', { class: 'mi', type: 'button', role: 'menuitem', disabled: dis, onclick: () => { closeMenu(); fn(); } }, icon(ic), label);
+  const box = el('div', { class: 'menu', role: 'menu' },
+    item('refresh', 'Atualizar agora', () => $('#btnRefresh').click()),
+    item('cal', 'Resumo do dia', () => { interacted = true; doDigest(); }), item('tasks', 'Tarefas', () => { S.pane = 'tasks'; renderAll(false, true); }),
+    item('spark', 'Priorizar com IA', () => { interacted = true; runTriage(); }, !sample || S.demo),
+    item('eye', S.settings.meetingReplies === 'all' ? 'Ocultar respostas de reunião' : 'Mostrar respostas de reunião', () => { S.settings.meetingReplies = S.settings.meetingReplies === 'all' ? 'comment' : 'all'; persist(); renderAll(false, false); }),
+    item('gear', 'Configurações', openSettings));
+  m.append(box); const r = anchor.getBoundingClientRect(); m.style.top = (r.bottom + 6) + 'px'; m.style.right = Math.max(8, window.innerWidth - r.right) + 'px'; m.style.left = 'auto';
+  setTimeout(() => document.addEventListener('click', closeMenu, { once: true }), 0);
+}
+function closeMenu() { $('#menu').replaceChildren(); }
+function openSettings() {
+  const m = $('#modal'); m.replaceChildren(); const set = S.settings; let lastInterval = set.interval;
+  const close = () => { m.replaceChildren(); persist(); if (mcp && lastInterval !== set.interval) startWatch(); renderAll(false, false); };
+  const sel = (key, opts) => { const s = el('select', { 'aria-label': key, onchange: (ev) => { set[key] = key === 'interval' ? Number(ev.target.value) : ev.target.value; } }); for (const [v, l] of opts) { const o = el('option', { value: v, text: l }); if (String(set[key]) === String(v)) o.selected = true; s.append(o); } return s; };
+  const ta = (key, ph) => { const t = el('textarea', { rows: 2, placeholder: ph, oninput: (ev) => { set[key] = ev.target.value; } }); t.value = set[key] || ''; return t; };
+  const txt = (key) => { const i = el('input', { type: 'text', oninput: (ev) => { set[key] = ev.target.value; } }); i.value = set[key] || ''; return i; };
+  const chk = (key, label) => el('label', { class: 'check' }, el('input', { type: 'checkbox', checked: !!set[key], onchange: (ev) => { set[key] = ev.target.checked; } }), label);
+  const dk = el('div', { class: 'field' });
+  const refreshDesktop = async () => {
+    dk.replaceChildren();
+    if (!desktop) { dk.append(el('p', { class: 'note', text: 'Avisos do sistema só existem no app instalado pelo app desktop do Claude.' })); return; }
+    if (desktop.notification) {
+      const st = await desktop.permissions.state('notifications').catch(() => 'unavailable'); desktopNotif = st === 'granted';
+      dk.append(el('label', { text: 'Avisos do sistema e ícone na barra de menu' }), el('button', { class: 'btn', type: 'button', disabled: desktopNotif, onclick: async () => { try { await desktop.permissions.request(['notifications', 'menu-bar']); } catch (er) {} await refreshDesktop(); updateTray(newCount()); }, text: desktopNotif ? 'Ativado' : 'Ativar avisos no desktop' }));
+      if (st === 'denied') dk.append(el('p', { class: 'note', text: 'Você recusou antes.' }), el('button', { class: 'btn sm', type: 'button', onclick: () => desktop.permissions.manage().catch(() => {}), text: 'Gerenciar permissões' }));
+    } else if (desktop.install) {
+      const st = await desktop.install.state().catch(() => 'unavailable');
+      if (st === 'available') dk.append(el('label', { text: 'Instalar como app' }), el('button', { class: 'btn primary', type: 'button', onclick: () => desktop.install.request().catch(() => {}), text: 'Instalar no computador' }), el('p', { class: 'note', text: 'Ganha janela própria, ícone e avisos do sistema.' }));
+      else if (st === 'installed') dk.append(el('p', { class: 'note', text: 'O app já está instalado neste computador. Abra-o por lá para ativar os avisos do sistema.' }));
+      else dk.append(el('p', { class: 'note', text: 'A instalação como app é feita pelo app desktop do Claude.' }));
+    }
+  };
+  refreshDesktop();
+  m.append(el('div', { class: 'modal-bg', onclick: (ev) => { if (ev.target.classList.contains('modal-bg')) close(); } }, el('div', { class: 'modal', role: 'dialog', 'aria-modal': 'true', 'aria-label': 'Configurações' },
+    el('h2', { text: 'Configurações' }), el('p', { class: 'note', text: S.demo ? 'Modo demonstração.' : (storeMode === 'db' ? 'Suas configurações e tarefas ficam salvas na sua conta.' : (storeMode === 'local' ? 'Ficam salvas só neste navegador.' : 'Neste modo, nada fica salvo depois que você fechar.')) }),
+    el('div', { class: 'field' }, el('label', { text: 'Respostas de reunião (aceito, recusado, provisório)' }), sel('meetingReplies', [['comment', 'Mostrar só as que têm comentário escrito'], ['hide', 'Esconder todas'], ['all', 'Mostrar todas']])),
+    el('div', { class: 'field' }, el('label', { text: 'Conferir novos e-mails a cada' }), sel('interval', [[30, '30 segundos'], [60, '1 minuto'], [120, '2 minutos'], [300, '5 minutos']]), el('div', { class: 'note', text: 'O app confere enquanto estiver aberto.' })),
+    el('div', { class: 'field' }, el('label', { text: 'Quando avisar' }), sel('notifyMode', [['all', 'Todo e-mail novo'], ['vip', 'Só VIPs e prioridade alta'], ['none', 'Não avisar']])),
+    el('div', { class: 'field' }, el('label', { text: 'VIPs (sempre avisar)' }), ta('vip', 'nomes ou e-mails, separados por vírgula')),
+    el('div', { class: 'field' }, el('label', { text: 'Silenciar (nunca avisar)' }), ta('mute', 'remetentes ou palavras do assunto, como [Lista-Geral]')),
+    el('div', { class: 'field' }, chk('sound', 'Tocar um som curto ao chegar e-mail')),
+    el('div', { class: 'field' }, chk('autoTriage', 'Classificar a prioridade dos e-mails novos com IA')),
+    el('div', { class: 'field' }, el('label', { text: 'Contexto para a IA (quem é você)' }), txt('perfil')),
+    el('div', { class: 'field' }, el('label', { text: 'Assinatura nas respostas' }), txt('assinatura')), dk,
+    el('div', { class: 'sticky' }, el('button', { class: 'btn primary', type: 'button', onclick: close, text: 'Salvar e fechar' })))));
+}
+
+/* ============ demonstração e início ============ */
+function demoEmails() {
+  const now = Date.now(), m = (min) => new Date(now - min * 60000).toISOString();
+  const mk = (i, from, name, subject, prev, min, unread, attach) => ({ id: 'demo' + i, uri: 'demo' + i, sender: from, senderName: name, subject, summary: prev, receivedDateTime: m(min), isRead: !unread, hasAttachments: !!attach, importance: 'normal', webLink: '', recipients: ['voce@exemplo.org'] });
+  return [
+    mk(1, 'chefia@exemplo.org', 'Marina Costa (Diretoria)', 'Reunião de alinhamento: confirmar até quinta', 'Oi! Você consegue confirmar a sala e enviar o convite para a reunião de quinta às 14h? Preciso da pauta até quarta.', 6, true, false),
+    mk(2, 'compras@exemplo.org', 'Setor de Compras', 'RE: Processo 123/2026 — documentos pendentes', 'Boa tarde. Falta anexar o termo de referência assinado para darmos andamento ao processo.', 35, true, true),
+    mk(3, 'rh@exemplo.org', 'Recursos Humanos', '[Lista Geral] Calendário de fim de ano', 'Informamos o funcionamento da instituição nos feriados de dezembro. Detalhes no anexo.', 120, true, true),
+    mk(4, 'ti@exemplo.org', 'Suporte de TI', 'Manutenção programada no sábado', 'O sistema ficará indisponível entre 8h e 12h para atualização.', 300, false, false),
+    mk(5, 'colega@exemplo.org', 'Rafael Lima', 'Aceito: Alinhamento semanal', '', 330, false, false),
+    mk(6, 'colega2@exemplo.org', 'Paula Nunes', 'Recusado: Revisão do painel', 'Oi, nesse horário estou em outra reunião. Podemos sexta pela manhã?', 400, false, false)
+  ];
+}
+function drawIcon() {
+  const c = document.createElement('canvas'); c.width = c.height = 256; const x = c.getContext('2d');
+  x.fillStyle = '#0f9d84'; x.beginPath(); const r = 56; x.moveTo(r, 0); x.arcTo(256, 0, 256, 256, r); x.arcTo(256, 256, 0, 256, r); x.arcTo(0, 256, 0, 0, r); x.arcTo(0, 0, 256, 0, r); x.fill();
+  x.strokeStyle = '#fff'; x.lineWidth = 14; x.lineJoin = 'round'; x.lineCap = 'round'; x.strokeRect(58, 78, 140, 100);
+  x.beginPath(); x.moveTo(62, 86); x.lineTo(128, 138); x.lineTo(194, 86); x.stroke(); return c.toDataURL('image/png');
+}
+$('#btnSettings').append(icon('gear')); $('#btnBack').append(icon('back')); $('#btnSearch').append(icon('search')); $('#btnRefresh').append(icon('refresh')); $('#btnMore').append(icon('more'));
+$('#btnBack').addEventListener('click', () => { $('#app').dataset.mobile = 'list'; });
+$('#btnSettings').addEventListener('click', () => { interacted = true; openSettings(); });
+$('#btnMore').addEventListener('click', (ev) => { ev.stopPropagation(); interacted = true; openMenu(ev.currentTarget); });
+$('#btnSearch').addEventListener('click', () => { S.searchOpen = !S.searchOpen; if (!S.searchOpen) { S.q = ''; $('#q').value = ''; } renderHeader(); renderChat(); if (S.searchOpen) $('#q').focus(); });
+$('#q').addEventListener('input', (ev) => { S.q = ev.target.value; renderChat(false); });
+$('#btnRefresh').addEventListener('click', () => { interacted = true; if (S.demo) { toast('Modo demonstração', 'Nada para atualizar aqui', null); return; } if (mcp) { mcp.invalidate(MS, 'outlook_email_search').catch(() => {}).finally(() => { if (S.connState !== 'ok') manualFetch(); }); S.busy = true; renderHeader(); setTimeout(() => { S.busy = false; renderHeader(); }, 2000); } });
+$('#fab').addEventListener('click', () => { const b = $('#msgs'); b.scrollTop = b.scrollHeight; });
+$('#msgs').addEventListener('scroll', () => { updateFab(); scheduleSeen(); }, { passive: true });
+document.addEventListener('focusout', () => { setTimeout(() => { if (S.deferChat) renderChat(false); }, 50); });
+document.addEventListener('visibilitychange', scheduleSeen);
+document.addEventListener('keydown', (ev) => { if (ev.key === 'Escape') { $('#modal').replaceChildren(); closeMenu(); } });
+window.addEventListener('pagehide', () => { dirty && flush(); });
+
+renderAll(true, true);
+await loadState();
+renderAll(true, true);
+sample = await useCap('sample');
+desktop = await useCap('desktop');
+if (desktop && desktop.app && desktop.app.dock) { try { desktop.app.dock.setIcon(drawIcon()).catch(() => {}); } catch {} }
+if (desktop && desktop.permissions) { try { desktopNotif = (await desktop.permissions.state('notifications')) === 'granted'; } catch {} }
+mcp = await useCap('mcp');
+if (mcp) startWatch(); else { S.demo = true; onEmails(demoEmails()); S.connState = 'ok'; }
+renderAll(true, true);
+</script>
+</body>
+</html>
